@@ -1,0 +1,29 @@
+## 环境配置
+
+```
+conda create -n env_name python=3.12
+conda activate env_name
+pip install -r requirements.txt
+```
+
+## 运行测试
+
+`cd /path/to/project-root`
+
+先运行后端代码：`python -m uvicorn backend.main:app --reload --host 0.0.0.0 --port 8000`
+
+> --reload 方便开发调试
+> 可以省略 python -m
+
+> (可选)在新终端中测试后端：
+>
+> ```
+> curl -X POST "http://localhost:8000/file_preview" \
+>      -F "file=@hw.zip"
+> ```
+
+再在新终端中运行前端代码：`streamlit run frontend/main.py --client.showSidebarNavigation=False`
+
+> - --client.showSidebarNavigation=False 隐藏 streamlit 默认文件目录导航侧边栏
+> - --server.port 8501：指定端口（默认 8501）。
+> - --server.headless true：在无头环境（容器、远程服务器）下不自动尝试打开浏览器。开发时本地也可以省略该参数以自动打开浏览器。

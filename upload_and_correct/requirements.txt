@@ -1,0 +1,11 @@
+streamlit
+langchain
+langchain-openai
+openai
+fastapi
+uvicorn
+python-dotenv
+PyPDF2
+rarfile
+py7zr
+python-multipart
