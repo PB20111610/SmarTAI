@@ -68,9 +68,9 @@ problem_data: Dict[str, Dict[str,str]] = {}
 # 用于存储学生提交的数据。
 # 它的结构将是一个列表 [ {student_dict_1}, {student_dict_2} ]
 '''
-[
-    {
-        "stu_id":"stu1",
+{
+    "PB20111639":{
+        "stu_id":"PB20111639",
         "stu_name":"张三",
         "stu_ans":
         [
@@ -81,8 +81,8 @@ problem_data: Dict[str, Dict[str,str]] = {}
             {"q_id": "q5", "number": "3.2", "type": "推理题", "content":"ans5",},
         ],
     },
-    {
-        "stu_id":"stu2",
+    "PB20111610":{
+        "stu_id":"PB20111639",
         "stu_name":"李四",
         "stu_ans":
         [
@@ -93,7 +93,7 @@ problem_data: Dict[str, Dict[str,str]] = {}
             {"q_id": "q5", "number": "3.2", "type": "推理题", "content":"ans5",},
         ],
     },
-]
+}
 '''
 # student_data: List[Dict[str, Any]] = []
 student_data: Dict[str,Dict[str, Any]] = {}
