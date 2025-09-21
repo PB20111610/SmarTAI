@@ -4,6 +4,7 @@ import logging
 from typing import Dict, List, Any, Type
 from pydantic import BaseModel, Field, ValidationError
 from langchain_openai import ChatOpenAI
+from langchain_google_genai import ChatGoogleGenerativeAI # <-- 换成这行
 
 # # 这是一个我们希望在不同路由间共享的 Python 变量
 # # 它可以是任何东西：一个数据库连接池、一个配置对象、一个AI模型实例等
@@ -17,33 +18,6 @@ from langchain_openai import ChatOpenAI
 
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
-
-# 您需要使用支持视觉（多模态）的模型，例如 "gpt-4o"
-OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "8dcdf3e9238f48f4ae329f638e66dfe2.HHIbfrj5M4GcjM8f")
-OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
-OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4")
-
-CONTEXT_WINDOW_THRESHOLD_CHARS = 200000 
-
-if not OPENAI_API_KEY:
-    logger.error("环境变量 OPENAI_API_KEY 未设置，后端调用将失败！")
-
-try:
-    client = ChatOpenAI(
-        api_key=OPENAI_API_KEY,
-        base_url=OPENAI_API_BASE,
-    )
-except Exception as e:
-    logger.error(f"初始化OpenAI客户端失败: {e}")
-    client = None
-
-# NOTE:zhipu ai直接复制这部分代码
-zhipu_ai = ChatOpenAI(
-            model=OPENAI_MODEL,
-            temperature=0.0,
-            api_key=OPENAI_API_KEY,
-            base_url=OPENAI_API_BASE,
-        )
 
 
 # ... (ProblemInfo 和 ProblemSet 的定义保持不变) ...
@@ -121,7 +95,8 @@ problem_data: Dict[str, Dict[str,str]] = {}
     },
 ]
 '''
-student_data: List[Dict[str, Any]] = []
+# student_data: List[Dict[str, Any]] = []
+student_data: Dict[str,Dict[str, Any]] = {}
 
 
 # --- 独立的依赖函数 ---
@@ -130,91 +105,82 @@ def get_problem_store() -> Dict[str, Dict[str,str]]:
     """依赖函数：返回题目数据的存储字典。"""
     return problem_data
 
-def get_student_store() -> List[Dict[str, Any]]:
+# def get_student_store() -> List[Dict[str, Any]]:
+def get_student_store() -> Dict[str,Dict[str, Any]]:
     """依赖函数：返回学生数据的存储列表。"""
     return student_data
 
-def get_llm() -> ChatOpenAI:
+
+GEMINI_API_KEY = "AIzaSyCTHCicOOCvfqirIVg1xcGvUYl5h58l7U0"
+
+# 您需要使用支持视觉（多模态）的模型，例如 "gpt-4o"
+OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "8dcdf3e9238f48f4ae329f638e66dfe2.HHIbfrj5M4GcjM8f")
+OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
+OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4")
+
+CONTEXT_WINDOW_THRESHOLD_CHARS = 200000 
+
+def get_llm(model="zhipu") -> ChatOpenAI:
     """返回共享的LLM客户端实例。"""
-    if zhipu_ai is None:
-        raise RuntimeError("LLM client is not initialized.")
-    return zhipu_ai
+
+    if model == "zhipu":
+        if not OPENAI_API_KEY:
+            logger.error("环境变量 OPENAI_API_KEY 未设置，后端调用将失败！")
+
+        try:
+            client = ChatOpenAI(
+                api_key=OPENAI_API_KEY,
+                base_url=OPENAI_API_BASE,
+            )
+        except Exception as e:
+            logger.error(f"初始化OpenAI客户端失败: {e}")
+            client = None
+
+        # NOTE:zhipu ai直接复制这部分代码
+        zhipu_ai = ChatOpenAI(
+                    model=OPENAI_MODEL,
+                    temperature=0.0,
+                    api_key=OPENAI_API_KEY,
+                    base_url=OPENAI_API_BASE,
+                )
+
+        return zhipu_ai
+
+    elif model == "gemini":
+        if not GEMINI_API_KEY:
+            logger.error("API 密钥未设置，后端调用将失败！")
+
+        try:
+            # 核心改动在这里：
+            # 1. 类从 ChatOpenAI 变为 ChatGoogleGenerativeAI
+            # 2. 参数从 api_key, base_url 变为 model, google_api_key
+            gemini_client = ChatGoogleGenerativeAI(
+                model="gemini-pro",  # 或者 "gemini-pro"
+                temperature=0.0,
+                google_api_key=GEMINI_API_KEY,
+            )
+            logger.info("LangChain Gemini 客户端初始化成功！")
+            
+            # 你可以继续使用 gemini_client 这个变量，就像你之前使用 zhipu_ai 一样
+            # 例如: gemini_client.invoke("你好")
+
+        except Exception as e:
+            logger.error(f"初始化 LangChain Gemini 客户端失败: {e}")
+            gemini_client = None
+
+        return gemini_client
 
 import re
 import json
-
-# def parse_llm_json_output(llm_output: str, output_model: Type[BaseModel]) -> BaseModel:
-#     """
-#     一个通用的、健壮的函数，用于从LLM的原始文本输出中提取JSON并使用Pydantic模型进行解析。
-
-#     它能处理LLM输出中常见的问题，例如：
-#     - JSON对象前后包含解释性文字或提示语。
-#     - 使用了Markdown的json代码块标记。
-#     - 不规则的换行和空白。
-
-#     Args:
-#         llm_output: 从LLM获取的原始字符串响应。
-#         output_model: 用于验证和数据转换的Pydantic模型类。
-
-#     Returns:
-#         一个已经验证和解析过的Pydantic模型实例。
-
-#     Raises:
-#         ValueError: 如果在llm_output中找不到有效的JSON结构，
-#                     或者提取的JSON字符串格式错误，
-#                     或者JSON内容不符合output_model的定义。
-#     """
-#     # 优先匹配JSON对象 `{...}`，因为它是最常见的顶层结构
-#     match = re.search(r'\{.*\}', llm_output, re.DOTALL)
-
-#     # 如果没有找到JSON对象，再尝试匹配JSON数组 `[...]`
-#     if not match:
-#         match = re.search(r'\[.*\]', llm_output, re.DOTALL)
-
-#     if not match:
-#         raise ValueError(
-#             "在LLM输出中未找到有效的JSON对象或数组结构。\n"
-#             f"原始输出: '{llm_output}...'" # 只显示部分输出以防过长
-#         )
-
-#     json_str = match.group(0)
-
-#     try:
-#         # 使用Pydantic V2的 `model_validate_json` 方法，它会一步完成JSON解析和模型验证
-#         return output_model.model_validate_json(json_str)
-#     except json.JSONDecodeError as e:
-#         # 捕获JSON语法错误，例如尾随逗号、引号未闭合等
-#         # raise ValueError(
-#         #     f"提取的字符串不是一个有效的JSON。错误: {e}\n"
-#         #     f"提取的字符串: '{json_str}...'"
-#         # )
-
-#         logger.error(f"提取的字符串: {json_str}")
-#         with open("error_json.txt", "w", encoding="utf-8") as file:
-#             file.write(json_str)
-#         raise ValueError(
-#             f"JSON内容不符合Pydantic模型定义。错误: {e}"
-#         )
-#     except ValidationError as e:
-#         # 捕获Pydantic验证错误，例如字段缺失、类型不匹配等
-#         # raise ValueError(
-#         #     f"JSON内容不符合Pydantic模型定义。错误: {e}\n"
-#         #     f"提取的字符串: '{json_str}...'"
-#         # )
-#         logger.error(f"提取的字符串: {json_str}")
-#         with open("error_json.txt", "w", encoding="utf-8") as file:
-#             file.write(json_str)
-#         raise ValueError(
-#             f"JSON内容不符合Pydantic模型定义。错误: {e}"
-#         )
-
 
 def parse_llm_json_output(llm_output: str, output_model: Type[BaseModel]) -> BaseModel:
     """
     一个通用的、健壮的函数，用于从LLM的原始文本输出中提取JSON并使用Pydantic模型进行解析。
 
-    [最终版]：能精准修复非法的反斜杠转义错误，同时保留合法的转义符（如 \\n, \\t）。
+    [最终修复版]：通过简单地将所有反斜杠加倍来修复所有类型的非法反斜杠转义错误，
+    这对于处理包含大量LaTeX等内容的字符串尤为稳健。
     """
+    # 优先匹配大括号，其次匹配方括号，以处理JSON对象和JSON数组
     match = re.search(r'\{.*\}', llm_output, re.DOTALL)
     if not match:
         match = re.search(r'\[.*\]', llm_output, re.DOTALL)
@@ -227,19 +193,25 @@ def parse_llm_json_output(llm_output: str, output_model: Type[BaseModel]) -> Bas
     try:
         # 第一次尝试直接解析
         return output_model.model_validate_json(json_str)
-    except ValidationError as e:
-        # 检查是否是由于JSON语法无效（特别是转义问题）导致的验证错误
-        # e.errors() 返回一个错误字典列表，我们检查第一个错误的类型
-        first_error = e.errors()[0] if e.errors() else {}
-        error_type = first_error.get('type')
-        
-        # 精准定位到由 'invalid escape' 引起的 'json_invalid' 错误
-        if error_type == 'json_invalid' and "invalid escape" in str(e):
-            print("检测到Pydantic报告了JSON转义错误，尝试智能修复...")
+    # except ValidationError as e:
+    #     # 检查是否是由于JSON语法无效（特别是转义问题）导致的验证错误
+    #     # e.errors() 返回一个错误字典列表，我们检查第一个错误的类型
+    #     first_error = e.errors()[0] if e.errors() else {}
+    #     error_type = first_error.get('type')
+    #     # 精准定位到由 'invalid escape' 引起的 'json_invalid' 错误
+    #     if error_type == 'json_invalid' and "invalid escape" in str(e):
+    #         print("检测到Pydantic报告了JSON转义错误，尝试智能修复...")
 
-            # 使用否定前瞻正则表达式，仅将非法的转义反斜杠加倍
-            # 这会修复 \a, \b, \c... 但会忽略 \n, \t, \", \\ 等
-            json_str_fixed = re.sub(r'\\(?![ntrbf"\\/])', r'\\\\', json_str)
+    except (ValidationError, json.JSONDecodeError) as e:
+        # 检查是否是由于非法转义引起的错误
+        # json.JSONDecodeError的错误信息通常包含 "Invalid \escape"
+        # Pydantic的ValidationError可能包装了底层的JSONDecodeError
+        if "invalid escape" in str(e).lower() or "invalid \\escape" in str(e).lower():
+            print("检测到JSON转义错误，尝试修复...")
+
+            # 放弃复杂的正则表达式，直接将所有反斜杠替换为转义后的反斜杠。
+            # 这能正确处理 \i, \g, 以及 \\ -> \\\\ 的情况。
+            json_str_fixed = json_str.replace('\\', '\\\\')
             
             try:
                 # 再次尝试解析修复后的字符串
@@ -248,7 +220,8 @@ def parse_llm_json_output(llm_output: str, output_model: Type[BaseModel]) -> Bas
             except Exception as final_e:
                 # 如果修复后仍然失败，则抛出信息更全的错误
                 logger.error(f"提取的字符串: {json_str}")
-                logger.error(f"修复的字符串: {json_str_fixed}")
+                logger.error(f"修复后的字符串: {json_str_fixed}")
+                # 写入文件以供调试
                 with open("error_json.txt", "w", encoding="utf-8") as file:
                     file.write(json_str)
                 with open("error_fixed_json.txt", "w", encoding="utf-8") as file:
@@ -260,7 +233,7 @@ def parse_llm_json_output(llm_output: str, output_model: Type[BaseModel]) -> Bas
                 )
         else:
             # 如果是其他类型的JSON错误，直接抛出
-            logger.error(f"提取的字符串: {json_str}")
+            logger.error(f"提取的字符串：{json_str}，它不是一个有效的JSON。错误: {e}")
             with open("error_json.txt", "w", encoding="utf-8") as file:
                 file.write(json_str)
 

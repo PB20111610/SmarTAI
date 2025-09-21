@@ -136,8 +136,18 @@ def analyze_submissions(
     # 将 Pydantic 模型与 LLM 绑定，使其能够输出我们想要的结构
     # structured_llm = llm.with_structured_output(StudentSubmission)
 
+    prob_main_data = []
+    for prob in problems_data.values():
+        prob_main = {}
+        prob_main["q_id"] = prob["q_id"]
+        prob_main["number"] = prob["number"]
+        prob_main["type"] = prob["type"]
+        prob_main["stem"] = prob["stem"]
+
+        prob_main_data.append(prob_main)
+
     # 为了方便LLM处理，将题目数据字典转换为JSON字符串
-    problems_json_str = json.dumps(problems_data, ensure_ascii=False, indent=2)
+    problems_json_str = json.dumps(prob_main_data, ensure_ascii=False, indent=1)
 
     all_students_results = []
 
@@ -199,17 +209,11 @@ def analyze_submissions(
                 logger.error(f"Error processing file {filename}: {e}")
                 # Continue processing other files even if one fails
 
-    # print("所有文件处理完毕。")
-    
-    # 修改传入的字典对象
+    stu_dict = {stu['stu_id']: stu for stu in all_students_results}
     student_store.clear()
-    student_store.extend(all_students_results)
-    
-    # 返回处理后的结果，以便API端点可以将其作为响应返回
-    return all_students_results
+    student_store.update(stu_dict)
 
-    # # 按照最终要求，将结果包装在 "students" 键下
-    # return {"students": all_students_results}
+    return stu_dict
 
 @router.post("/")
 async def handle_answer_upload(
@@ -257,8 +261,7 @@ async def handle_answer_upload(
         )
         logger.info(f"成功分割作答内容：{recognized_ans}")
 
-        # 为了演示，我们直接返回提取的数据
-        return {"students":recognized_ans,}
+        return recognized_ans
 
     except ValueError as e:
         # 处理缺少库的错误

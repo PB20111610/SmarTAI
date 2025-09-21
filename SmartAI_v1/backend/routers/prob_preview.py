@@ -88,30 +88,12 @@ def process_and_store_problems(
         # response_obj: ProblemSet = await structured_llm.ainvoke(messages)
 
         raw_llm_output = llm.invoke(messages).content
-        print(f"AI原始输出: {raw_llm_output}")
-        
-        # Check if the output is empty or invalid
-        if not raw_llm_output or not raw_llm_output.strip():
-            raise HTTPException(status_code=500, detail="AI未能从文本中提取出任何有效的题目（AI返回空内容）。")
-        
         json_output = parse_llm_json_output(raw_llm_output, ProblemSet)
         print("AI分析完成。")
         
         if not (json_output and json_output.problems):
-            # Try to create a default problem if AI failed to parse
-            default_problem = {
-                "problems": [
-                    {
-                        "q_id": "q1",
-                        "number": "1",
-                        "type": "概念题",
-                        "stem": text[:200] + "..." if len(text) > 200 else text,
-                        "criterion": "默认评分标准"
-                    }
-                ]
-            }
-            json_output = ProblemSet(**default_problem)
-        
+            raise HTTPException(status_code=500, detail="AI未能从文本中提取出任何有效的题目。")
+
         # 直接dump整个对象
         new_problem_data = json_output.model_dump()
         
@@ -124,9 +106,6 @@ def process_and_store_problems(
         # 返回处理后的结果，以便API端点可以将其作为响应返回
         return prob_dict
 
-    except HTTPException:
-        # Re-raise HTTP exceptions
-        raise
     except Exception as e:
         # 将底层错误包装成HTTPException
         raise HTTPException(status_code=500, detail=f"AI处理过程中发生错误: {e}")
@@ -146,24 +125,8 @@ async def handle_homework_upload(
     try:
         # 1. 处理文件 I/O 和解码
         text_bytes = await file.read()
-        logger.info(f"文件大小: {len(text_bytes)} 字节")
-        
-        # Handle different file types
-        if file.content_type in ['application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document']:
-            # For PDF and DOCX files, we need to extract text
-            # This is a placeholder - in a real implementation, you would use libraries like PyPDF2 or python-docx
-            text = f"[文件内容无法直接解析 - 文件类型: {file.content_type}, 文件名: {file.filename}]"
-            logger.warning(f"无法直接解析文件内容: {file.filename} ({file.content_type})")
-        else:
-            # For text files, decode normally
-            text = decode_text_bytes(text_bytes)
-        
-        logger.info(f"提取的文本长度: {len(text)} 字符")
-        logger.info(f"提取的文本预览: {text[:100]}...")
-        
-        # Check if text is empty
-        if not text or not text.strip():
-            raise HTTPException(status_code=400, detail="上传的文件为空或无法提取有效文本内容。")
+        text = decode_text_bytes(text_bytes)
+        logger.info(f"文件内容: {text}")
         
         # 2. 调用核心服务函数处理业务逻辑
         # 将解码后的文本和注入的依赖传递给服务函数
@@ -180,7 +143,7 @@ async def handle_homework_upload(
             problem_store=problem_store
         )
         logger.info(f"识别并存储了 {len(recognized_hw)} 个题目。")
-        logger.info(f"识别题目内容: {list(recognized_hw.values())}")
+        logger.info(f"识别题目内容: {recognized_hw}")
         
         # 3. 返回成功响应
         return JSONResponse(content=recognized_hw)
