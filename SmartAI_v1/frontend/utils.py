@@ -114,7 +114,7 @@ def inject_pollers_for_active_jobs():
     【核心函数优化版】将所有活动任务的ID打包，一次性注入一个主轮询器。
     """
     if "jobs" not in st.session_state:
-        st.session_state.jobs = []
+        st.session_state.jobs = {}
     if "backend" not in st.session_state:
         st.session_state.backend = "http://localhost:8000"
 

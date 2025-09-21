@@ -78,8 +78,13 @@ if st.session_state.get('trigger_ai_grading'):
             }
 
             # 5. 将这个任务的详细信息存入全局的任务字典中，以 job_id 作为唯一的键
-            if job_id not in st.session_state.jobs:
-                st.session_state.jobs[job_id] = task_details
+            st.session_state.jobs[job_id] = task_details
+            # Also store the job_id for immediate access
+            st.session_state.current_job_id = job_id
+            
+            # Debug information
+            st.write(f"Stored job ID: {job_id}")
+            st.write(f"Jobs in session state: {list(st.session_state.jobs.keys())}")
             
             # 6. 更新成功提示信息，显示用户友好的任务名
             _, img_col, _ = st.columns([1, 1, 1])

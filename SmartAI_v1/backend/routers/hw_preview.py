@@ -3,6 +3,7 @@ import io
 import logging
 import json
 import asyncio
+import concurrent.futures
 from typing import List, Dict, Any
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
@@ -141,7 +142,9 @@ def analyze_submissions(
     all_students_results = []
 
     print(f"开始处理 {len(files_data)}份学生提交...")
-    for file_info in files_data:
+    
+    # Define a helper function for processing a single file
+    def process_single_file(file_info):
         filename = file_info.get("filename", "")
         content = file_info.get("content", "")
 
@@ -172,9 +175,29 @@ def analyze_submissions(
         # response_obj = structured_llm.invoke(messages)
         raw_llm_output = llm.invoke(messages).content
         json_output = parse_llm_json_output(raw_llm_output, StudentSubmission)
-            # 将返回的 Pydantic 对象转换为字典并添加到结果列表
         logger.info(f"提取到学生解答:{json_output.model_dump()}")
-        all_students_results.append(json_output.model_dump())
+        return json_output.model_dump()
+
+    # Use ThreadPoolExecutor to process files in parallel
+    # Limit the number of workers to avoid overwhelming the system
+    max_workers = min(len(files_data), 16)  # Process up to 16 files in parallel
+    with concurrent.futures.ThreadPoolExecutor(max_workers=max_workers) as executor:
+        # Submit all file processing tasks
+        future_to_file = {
+            executor.submit(process_single_file, file_info): file_info 
+            for file_info in files_data
+        }
+        
+        # Collect results as they complete
+        for future in concurrent.futures.as_completed(future_to_file):
+            try:
+                result = future.result()
+                all_students_results.append(result)
+            except Exception as e:
+                file_info = future_to_file[future]
+                filename = file_info.get("filename", "Unknown")
+                logger.error(f"Error processing file {filename}: {e}")
+                # Continue processing other files even if one fails
 
     # print("所有文件处理完毕。")
     
@@ -206,7 +229,7 @@ async def handle_answer_upload(
         
         # 1. 使用新函数提取所有文件的内容
         # 这个函数会处理压缩包和单个文件
-        files_data = extract_files_from_archive(file_bytes, file.filename)
+        files_data = await asyncio.to_thread(extract_files_from_archive, file_bytes, file.filename)
         
         if not files_data:
             raise HTTPException(status_code=400, detail="未在上传文件中找到有效的文本文件。")

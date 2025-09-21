@@ -36,9 +36,14 @@ def init_session_state():
     # Check if we have a selected job for AI grading data
     if 'selected_job_id' in st.session_state and st.session_state.selected_job_id:
         # Load AI grading data
-        if 'ai_grading_data' not in st.session_state:
-            with st.spinner("正在加载AI批改数据..."):
-                st.session_state.ai_grading_data = load_ai_grading_data(st.session_state.selected_job_id)
+        with st.spinner("正在加载AI批改数据..."):
+            ai_data = load_ai_grading_data(st.session_state.selected_job_id)
+            if "error" not in ai_data:
+                st.session_state.ai_grading_data = ai_data
+            else:
+                st.error(f"加载AI批改数据失败: {ai_data['error']}")
+                # Fallback to default data
+                st.session_state.sample_data = create_default_data()
     else:
         # Load sample data if no job is selected
         if 'sample_data' not in st.session_state:
@@ -100,17 +105,21 @@ def create_default_data():
 
 def render_header():
     """渲染页面头部"""
-    col1, col2, col3 = st.columns([2, 3, 2])
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
     
     with col1:
         if st.button("🏠 返回首页", type="secondary"):
             st.switch_page("main.py")
     
     with col2:
+        if st.button("📊 批改结果", type="secondary"):
+            st.switch_page("pages/grade_results.py")
+    
+    with col3:
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>📈 成绩展示</h1>", 
                    unsafe_allow_html=True)
     
-    with col3:
+    with col4:
         if st.button("📊 评分报告", type="primary"):
             st.switch_page("pages/score_report.py")
 
@@ -145,7 +154,7 @@ def render_statistics_overview(students: List[StudentScore], assignment_stats: A
     with col2:
         st.markdown(f"""
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; border-top: 4px solid #1E3A8A;">
-            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{avg_score:.1f}%</div>
+            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{avg_score:.1f}</div>
             <div style="font-size: 0.875rem; color: #64748B; text-transform: uppercase; font-weight: 600;">平均分</div>
         </div>
         """, unsafe_allow_html=True)
@@ -153,7 +162,7 @@ def render_statistics_overview(students: List[StudentScore], assignment_stats: A
     with col3:
         st.markdown(f"""
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; border-top: 4px solid #1E3A8A;">
-            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{max_score:.1f}%</div>
+            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{max_score:.1f}</div>
             <div style="font-size: 0.875rem; color: #64748B; text-transform: uppercase; font-weight: 600;">最高分</div>
         </div>
         """, unsafe_allow_html=True)
@@ -161,7 +170,7 @@ def render_statistics_overview(students: List[StudentScore], assignment_stats: A
     with col4:
         st.markdown(f"""
         <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1); text-align: center; border-top: 4px solid #1E3A8A;">
-            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{min_score:.1f}%</div>
+            <div style="font-size: 2.5rem; font-weight: 700; color: #1E3A8A; margin-bottom: 0.25rem;">{min_score:.1f}</div>
             <div style="font-size: 0.875rem; color: #64748B; text-transform: uppercase; font-weight: 600;">最低分</div>
         </div>
         """, unsafe_allow_html=True)
@@ -246,11 +255,28 @@ def main():
     else:
         data = st.session_state.sample_data
     
-    students = data['student_scores']
-    assignment_stats = data['assignment_stats']
+    students = data.get('student_scores', [])
+    assignment_stats = data.get('assignment_stats', None)
     
     # 渲染各个模块
-    render_statistics_overview(students, assignment_stats)
+    if assignment_stats:
+        render_statistics_overview(students, assignment_stats)
+    else:
+        # Create a default assignment stats object if not available
+        default_stats = AssignmentStats(
+            assignment_id="DEFAULT",
+            assignment_name="示例作业",
+            total_students=len(students),
+            submitted_count=len(students),
+            avg_score=np.mean([s.percentage for s in students]) if students else 0,
+            max_score=max([s.percentage for s in students]) if students else 0,
+            min_score=min([s.percentage for s in students]) if students else 0,
+            std_score=np.std([s.percentage for s in students]) if students else 0,
+            pass_rate=(len([s for s in students if s.percentage >= 60]) / len(students) * 100) if students else 0,
+            question_count=0,
+            create_time=datetime.now()
+        )
+        render_statistics_overview(students, default_stats)
     
     st.markdown("---")
     

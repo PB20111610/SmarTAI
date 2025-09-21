@@ -93,7 +93,14 @@ def sync_completed_records():
                         "completed_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                         "status": status
                     }
+                elif status == "not_found":
+                    # If job is not found, remove it from jobs to prevent continuous polling
+                    st.warning(f"任务 {job_id} 未找到，已从活动任务中移除")
+                    if job_id in st.session_state.jobs:
+                        del st.session_state.jobs[job_id]
             except Exception as e:
+                # Log the error but continue processing other jobs
+                print(f"Error checking job {job_id}: {e}")
                 continue
 
 def create_draft_record(record_id: str, record_data: Dict[str, Any]):

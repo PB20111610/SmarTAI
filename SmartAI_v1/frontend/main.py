@@ -27,86 +27,6 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
-# 加载自定义CSS
-def load_css():
-    """加载自定义CSS样式"""
-    try:
-        with open("assets/styles.css", "r", encoding="utf-8") as f:
-            st.markdown(f"<style>{f.read()}</style>", unsafe_allow_html=True)
-    except FileNotFoundError:
-        # 如果文件不存在，使用内联样式
-        st.markdown("""
-        <style>
-        .main {
-            padding: 2rem;
-        }
-        .hero-section {
-            text-align: center;
-            padding: 3rem 0;
-            background: linear-gradient(135deg, #1E3A8A 0%, #3B82F6 100%);
-            color: white;
-            border-radius: 15px;
-            margin-bottom: 2rem;
-            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
-        }
-        .feature-card {
-            background: white;
-            padding: 2rem;
-            border-radius: 15px;
-            box-shadow: 0 8px 25px rgba(0,0,0,0.1);
-            text-align: center;
-            transition: all 0.3s ease;
-            border-top: 4px solid #1E3A8A;
-            height: 100%;
-        }
-        .feature-card:hover {
-            transform: translateY(-5px);
-            box-shadow: 0 15px 35px rgba(0,0,0,0.15);
-        }
-        .feature-icon {
-            font-size: 3rem;
-            margin-bottom: 1rem;
-        }
-        .feature-title {
-            font-size: 1.5rem;
-            font-weight: 700;
-            color: #1E3A8A;
-            margin-bottom: 1rem;
-        }
-        .feature-description {
-            color: #64748B;
-            line-height: 1.6;
-            margin-bottom: 1.5rem;
-        }
-        .stats-card {
-            background: white;
-            padding: 1.5rem;
-            border-radius: 10px;
-            box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-            text-align: center;
-            border-left: 4px solid #10B981;
-        }
-        .stats-number {
-            font-size: 2.5rem;
-            font-weight: 700;
-            color: #1E3A8A;
-            margin-bottom: 0.5rem;
-        }
-        .stats-label {
-            color: #64748B;
-            font-size: 0.875rem;
-            text-transform: uppercase;
-            font-weight: 600;
-        }
-        .quick-access {
-            background: #F8FAFC;
-            padding: 2rem;
-            border-radius: 15px;
-            margin: 2rem 0;
-        }
-        </style>
-        """, unsafe_allow_html=True)
-
 def init_session_state():
     """初始化会话状态"""
     # Initialize session state from utils.py
@@ -218,10 +138,9 @@ def render_hero_section():
     st.markdown("""
     <div class="hero-section">
         <h1 style="font-size: 3rem; margin-bottom: 1rem; font-weight: 700;">🎓 SmarTAI</h1>
-        <h2 style="font-size: 1.5rem; margin-bottom: 1rem; opacity: 0.9;">智能评估平台</h2>
+        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.9;">智能评估平台</h2>
         <p style="font-size: 1.125rem; opacity: 0.8; max-width: 600px; margin: 0 auto;">
-            基于人工智能的理工科教育评估系统<br>
-            提供智能评分、深度分析和可视化报告
+            基于人工智能的理工科教育评估系统提供智能评分、深度分析和可视化报告
         </p>
     </div>
     """, unsafe_allow_html=True)
@@ -275,14 +194,27 @@ def render_statistics_overview():
     
     # 获取统计数据
     data = st.session_state.sample_data
-    students = data['student_scores']
-    assignment_stats = data['assignment_stats']
     
-    # 计算统计指标
-    total_students = len(students)
-    avg_score = sum(s.percentage for s in students) / len(students) if students else 0
-    pass_rate = len([s for s in students if s.percentage >= 60]) / len(students) * 100 if students else 0
-    need_review = len([s for s in students if s.need_review])
+    # Check if data contains required keys
+    if 'student_scores' not in data:
+        st.error("数据加载失败：缺少学生分数信息")
+        return
+        
+    students = data['student_scores']
+    
+    # Handle case where assignment_stats might be missing
+    if 'assignment_stats' in data:
+        assignment_stats = data['assignment_stats']
+        total_students = assignment_stats.total_students
+        avg_score = assignment_stats.avg_score
+        pass_rate = assignment_stats.pass_rate
+        need_review = len([s for s in students if s.need_review])
+    else:
+        # Calculate stats from student data if assignment_stats is missing
+        total_students = len(students)
+        avg_score = sum(s.percentage for s in students) / len(students) if students else 0
+        pass_rate = len([s for s in students if s.percentage >= 60]) / len(students) * 100 if students else 0
+        need_review = len([s for s in students if s.need_review])
     
     # 显示统计卡片
     col1, col2, col3, col4 = st.columns(4)
@@ -334,15 +266,19 @@ def render_feature_cards():
                 查看学生作业详细评分结果，支持人工修改和批量操作。
                 提供置信度分析和复核建议。
             </div>
+            <div class="feature-card-buttons">
         """, unsafe_allow_html=True)
         
-        if st.button("📊 查看评分报告", use_container_width=True, type="primary"):
-            # Clear any existing selected job ID to show sample data by default
-            if 'selected_job_id' in st.session_state:
-                del st.session_state.selected_job_id
+        if st.button("📊 查看评分报告", use_container_width=True, type="primary", key="report_button_1"):
+            # Don't clear the selected job ID, keep it so the score report can load the data
+            # if 'selected_job_id' in st.session_state:
+            #     del st.session_state.selected_job_id
             st.switch_page("pages/score_report.py")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col2:
         st.markdown("""
@@ -353,15 +289,19 @@ def render_feature_cards():
                 深度分析学生表现和题目质量，生成交互式图表和统计报告。
                 支持多维度数据分析。
             </div>
+            <div class="feature-card-buttons">
         """, unsafe_allow_html=True)
         
-        if st.button("📈 查看可视化分析", use_container_width=True, type="primary"):
-            # Clear any existing selected job ID to show sample data by default
-            if 'selected_job_id' in st.session_state:
-                del st.session_state.selected_job_id
+        if st.button("📈 查看可视化分析", use_container_width=True, type="primary", key="viz_button_2"):
+            # Don't clear the selected job ID, keep it so the visualization can load the data
+            # if 'selected_job_id' in st.session_state:
+            #     del st.session_state.selected_job_id
             st.switch_page("pages/visualization.py")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
     
     with col3:
         st.markdown("""
@@ -370,14 +310,18 @@ def render_feature_cards():
             <div class="feature-title">历史记录</div>
             <div class="feature-description">
                 查看历史批改记录，支持暂存功能。可以预览、编辑暂存记录，
-                查看已完成批改的详细结果和可视化分析。
+                查看已完成批改的作业详情。
             </div>
+            <div class="feature-card-buttons">
         """, unsafe_allow_html=True)
         
-        if st.button("📚 查看历史记录", use_container_width=True, type="primary"):
+        if st.button("📚 查看历史记录", use_container_width=True, type="primary", key="history_button_3"):
             st.switch_page("pages/history_enhanced.py")
 
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown("""
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
 
 def render_upload_section():
     """渲染上传功能区域"""
@@ -437,7 +381,7 @@ def render_quick_actions():
         <h3 style="color: #1E3A8A; margin-bottom: 1.5rem;">⚡ 快速操作</h3>
     """, unsafe_allow_html=True)
     
-    col1, col2, col3, col4, col5 = st.columns(5)
+    col1, col2, col3, col4, col5, col6 = st.columns(6)
     
     with col1:
         if st.button("📋 最新作业", use_container_width=True):
@@ -459,6 +403,10 @@ def render_quick_actions():
             st.switch_page("pages/knowledge_base.py")
     
     with col5:
+        if st.button("📊 批改结果", use_container_width=True):
+            st.switch_page("pages/grade_results.py")
+    
+    with col6:
         if st.button("⚙️ 系统设置", use_container_width=True):
             st.info("🔧 打开系统设置界面...")
     
@@ -520,11 +468,10 @@ def render_footer():
     with col1:
         st.markdown("""
         ### 📞 技术支持
-        **邮箱:** support@smartai.edu<br>
-        **电话:** 400-123-4567
+        **邮箱:** support@smartai.edu
         """)
     
-    with col2:
+    with col2: #TODO: 添加帮助链接
         st.markdown("""
         ### 📚 使用帮助
         - [用户手册](https://docs.smartai.edu)
@@ -535,8 +482,8 @@ def render_footer():
     with col3:
         st.markdown("""
         ### ℹ️ 系统信息
-        **版本:** v1.0.0<br>
-        **最后更新:** 2024-09-13
+        **版本:** v1.0.0
+        **最后更新:** 2024-09-30
         """)
 
 def render_dashboard():

@@ -2,15 +2,16 @@
 Calculation question correction node implementation.
 """
 import structlog
-import re  # Using standard re instead of regex_module
+import re
 import os
 import json
 import argparse
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 from pydantic import BaseModel
 
 from backend.models import Correction, StepScore
 from backend.correct.prompt_utils import prepare_calc_prompt
+from backend.dependencies import get_llm
 
 # Setup logger
 logger = structlog.get_logger()
@@ -20,23 +21,21 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "8dcdf3e9238f48f4ae329f638e66dfe2.H
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4")
 
+# Global LLM client for connection pooling
+LLM_CLIENT = None
 
-class Step(BaseModel):
-    step_no: int
-    content: str
-    formula: str
-
+def get_llm_client():
+    """Get or create a shared LLM client for connection pooling."""
+    global LLM_CLIENT
+    if LLM_CLIENT is None:
+        LLM_CLIENT = get_llm()
+    return LLM_CLIENT
 
 class AnswerUnit(BaseModel):
-    q_id: str = "q1"
-    text: str = ""
-    steps: List[Step] = []
-    question: Dict[str, Any] = {}
-
-
-class Question(BaseModel):
-    type: str = "calc"
-
+    """Model for calculation answer unit."""
+    q_id: str
+    text: str
+    steps: List[Dict[str, Any]]
 
 def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
     """
@@ -138,15 +137,15 @@ def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
                 response_keys=list(llm_response.keys()) if isinstance(llm_response, dict) else "Not a dict")
     return llm_response
 
-
-def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0) -> Correction:
+def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0, llm=None) -> Correction:
     """
     Calculation question correction node.
     
     Args:
-        answer_unit: The answer unit containing the student's calculation steps
+        answer_unit: The answer unit containing the student's answer steps
         rubric: The grading rubric
         max_score: The maximum score for this question
+        llm: Optional LLM client to use for processing (if None, uses shared client)
         
     Returns:
         Correction: The correction result
@@ -154,44 +153,67 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
     logger.info("calc_node_start", q_id=answer_unit.get("q_id", "unknown"))
     
     # Convert dict to AnswerUnit model
+    # Handle the case where steps might not be in the expected format
+    if "steps" in answer_unit and isinstance(answer_unit["steps"], list):
+        # Ensure steps are in the expected dictionary format
+        steps = []
+        for step in answer_unit["steps"]:
+            if isinstance(step, dict):
+                steps.append(step)
+            # If steps are already in the correct format, keep them as is
+        answer_unit["steps"] = steps
+    
     answer_unit_model = AnswerUnit(**answer_unit)
     
-    # Step 1: Parse steps (already done in AnswerUnit)
+    # Step 1: Extract student answer steps
     steps = answer_unit_model.steps
     
     # Step 2: Prepare prompt using the new prompt_utils module
     try:
         template_path = "backend/prompts/calc.txt"
+        student_answer = answer_unit_model.text
+        # For now, we use the student answer as both problem and correct_answer since we don't have the correct answer
+        # In a real implementation, you would get the correct answer from the problem store
         problem = answer_unit_model.text
-        student_answer = "\n".join([f"步骤{step.step_no}: {step.content}" for step in steps])
-        correct_answer = "正确解题步骤"  # Mock correct answer
-        
+        correct_answer = answer_unit_model.text
         prompt = prepare_calc_prompt(template_path, problem, student_answer, correct_answer, rubric)
         
         # In a real implementation, you would call an LLM with this prompt
         # For now, we'll just log that we would use it
         logger.info("calc_prompt_prepared", prompt=prompt[:100] + "..." if len(prompt) > 100 else prompt)
         
-        # Step 3: Call LLM with the prepared prompt
+        # Step 3: Call LLM with the prepared prompt using connection pooling
         try:
-            # Initialize the LLM (using Zhipu AI as in prob_preview.py)
-            from langchain_openai import ChatOpenAI
+            # Use provided LLM client or get shared LLM client for connection pooling
+            if llm is None:
+                llm = get_llm_client()
             from langchain.schema import HumanMessage
             
-            llm = ChatOpenAI(
-                model=OPENAI_MODEL,
-                temperature=0.0,
-                api_key=OPENAI_API_KEY,
-                base_url=OPENAI_API_BASE,
-            )
-            # Use invoke method instead of direct call to avoid deprecation warning
-            response = llm.invoke([HumanMessage(content=prompt)])
-            
-            # Log the raw response for debugging
-            logger.info("llm_raw_response", content=response.content[:500] + "..." if len(response.content) > 500 else response.content)
-            
-            # Parse the JSON response
-            llm_response = parse_llm_json_response(response.content)
+            # Add retry logic for LLM calls
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    # Use invoke method instead of direct call to avoid deprecation warning
+                    response = llm.invoke([HumanMessage(content=prompt)])
+                    
+                    # Log the raw response for debugging
+                    logger.info("llm_raw_response", content=response.content[:500] + "..." if len(response.content) > 500 else response.content)
+                    
+                    # Parse the JSON response
+                    llm_response = parse_llm_json_response(response.content)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    retry_count += 1
+                    logger.warning(f"LLM call attempt {retry_count} failed: {str(e)}")
+                    if retry_count >= max_retries:
+                        raise  # Re-raise the exception if all retries failed
+                    # Wait a bit before retrying
+                    import time
+                    time.sleep(2)  # Increased delay to reduce API load
+            else:
+                # This should not happen, but just in case
+                raise Exception("LLM call failed after all retries")
             
             # Create step scores from LLM response
             step_scores = []
@@ -223,7 +245,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
             try:
                 correction = Correction(
                     q_id=answer_unit_model.q_id,
-                    type="calc",
+                    type="计算题",
                     score=total_score,
                     max_score=response_max_score,  # Use the AI response max_score
                     confidence=overall_confidence,
@@ -232,7 +254,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
                 )
             except Exception as correction_error:
                 logger.error("correction_creation_failed", error=str(correction_error), 
-                           q_id=answer_unit_model.q_id, type="calc", score=total_score, 
+                           q_id=answer_unit_model.q_id, type="计算题", score=total_score, 
                            max_score=max_score, confidence=overall_confidence,
                            comment=comment,
                            steps_count=len(step_scores))
@@ -246,7 +268,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
             # Create a simple rule-based correction as fallback
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="calc",
+                type="计算题",
                 score=5.0,  # Default score
                 max_score=max_score,
                 confidence=0.5,  # Default confidence
@@ -298,17 +320,30 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
         
         # Try to call LLM with default prompt
         try:
-            from langchain_openai import ChatOpenAI
+            # Use provided LLM client or get shared LLM client for connection pooling
+            if llm is None:
+                llm = get_llm_client()
             from langchain.schema import HumanMessage
             
-            llm = ChatOpenAI(
-                model=OPENAI_MODEL,
-                temperature=0.0,
-                api_key=OPENAI_API_KEY,
-                base_url=OPENAI_API_BASE,
-            )
-            response = llm.invoke([HumanMessage(content=default_prompt)])
-            llm_response = parse_llm_json_response(response.content)
+            # Add retry logic for LLM calls
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    response = llm.invoke([HumanMessage(content=default_prompt)])
+                    llm_response = parse_llm_json_response(response.content)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    retry_count += 1
+                    logger.warning(f"Fallback LLM call attempt {retry_count} failed: {str(e)}")
+                    if retry_count >= max_retries:
+                        raise  # Re-raise the exception if all retries failed
+                    # Wait a bit before retrying
+                    import time
+                    time.sleep(2)  # Increased delay to reduce API load
+            else:
+                # This should not happen, but just in case
+                raise Exception("Fallback LLM call failed after all retries")
             
             # Create step scores from LLM response
             step_scores = []
@@ -339,7 +374,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
             # Create correction object with LLM results
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="calc",
+                type="计算题",
                 score=total_score,
                 max_score=response_max_score,
                 confidence=overall_confidence,
@@ -352,7 +387,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
             # Create a simple rule-based correction as final fallback
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="calc",
+                type="计算题",
                 score=5.0,  # Default score
                 max_score=max_score,
                 confidence=0.5,  # Default confidence
@@ -372,7 +407,7 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
         # Create a simple rule-based correction as fallback
         correction = Correction(
             q_id=answer_unit_model.q_id,
-            type="calc",
+            type="计算题",
             score=5.0,  # Default score
             max_score=max_score,
             confidence=0.5,  # Default confidence
@@ -387,7 +422,6 @@ def calc_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0)
             ]
         )
         return correction
-
 
 def process_calc_from_files(input_file: str, rubric_file: str, output_file: str, max_score: float = 10.0):
     """
@@ -421,7 +455,6 @@ def process_calc_from_files(input_file: str, rubric_file: str, output_file: str,
     
     logger.info("calc_processing_complete", input_file=input_file, output_file=output_file)
     return correction
-
 
 if __name__ == "__main__":
     # Set up argument parser for file-based processing

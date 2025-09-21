@@ -31,6 +31,43 @@ def create_app() -> FastAPI:
 
 app = create_app()
 
+# Load problem data on startup
+# @app.on_event("startup")
+# async def load_problem_data_on_startup():
+#     """Load problem data from JSON files when the application starts."""
+#     try:
+#         import os
+#         import json
+#         from backend.dependencies import problem_data
+        
+#         # Load problem data from answer_index_by_problems.json
+#         problems_file = os.path.join(os.path.dirname(__file__), 'routers', 'answer_index_by_problems.json')
+        
+#         if os.path.exists(problems_file):
+#             with open(problems_file, 'r', encoding='utf-8') as f:
+#                 data = json.load(f)
+                
+#             # Convert to the expected format
+#             problems = data.get('students', [])
+#             for problem in problems:
+#                 q_id = problem.get('id')
+#                 if q_id:
+#                     # Store the problem data with q_id as the key
+#                     problem_data[q_id] = {
+#                         'q_id': q_id,
+#                         'number': problem.get('number', ''),
+#                         'type': problem.get('type', '概念题'),
+#                         'stem': problem.get('stem', ''),
+#                         'criterion': problem.get('criterion', '默认评分标准')
+#                     }
+            
+#             logger.info(f"Loaded {len(problem_data)} problems into problem_data on startup")
+#         else:
+#             logger.warning(f"Problems file not found: {problems_file}")
+            
+#     except Exception as e:
+#         logger.error(f"Error loading problem data on startup: {e}")
+
 # # 如果需要在启动时初始化 DB 或其它资源
 # @app.on_event("startup")
 # async def on_startup():

@@ -3,7 +3,7 @@ import time
 
 # 设置页面配置
 st.set_page_config(
-    page_title="smarTAI作业平台",
+    page_title="SmarTAI作业平台",
     page_icon="🎓",
     layout="centered",
     initial_sidebar_state="collapsed"
@@ -366,7 +366,7 @@ def main():
 
 def render_home_page():
     """渲染主页面"""
-    st.markdown('<div class="title" data-text="smarTAI作业平台">smarTAI作业平台</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title" data-text="SmarTAI作业平台">SmarTAI作业平台</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">智能化作业批改系统</div>', unsafe_allow_html=True)
 
     # 主界面内容
@@ -399,7 +399,7 @@ def render_home_page():
 
 def render_welcome_page():
     """渲染欢迎页面（登录后）"""
-    st.markdown('<div class="title">🎉 欢迎使用 smarTAI作业平台</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title">🎉 欢迎使用 SmarTAI作业平台</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">登录成功！</div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])

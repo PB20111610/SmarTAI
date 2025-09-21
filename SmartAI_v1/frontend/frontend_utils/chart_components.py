@@ -110,10 +110,10 @@ class ChartComponents:
         
         # 根据题目类型设置颜色
         type_colors = {
-            'concept': self.colors['primary'],
-            'calculation': self.colors['success'],
-            'proof': self.colors['warning'],
-            'programming': self.colors['info']
+            '概念题': self.colors['primary'],
+            '计算题': self.colors['success'],
+            '证明题': self.colors['warning'],
+            '编程题': self.colors['info']
         }
         
         colors = [type_colors.get(qt, self.colors['primary']) for qt in question_types]
@@ -220,10 +220,10 @@ class ChartComponents:
         categories = []
         values = []
         type_names = {
-            'concept': '概念理解',
-            'calculation': '计算能力',
-            'proof': '证明推理',
-            'programming': '编程实现'
+            '概念题': '概念理解',
+            '计算题': '计算能力',
+            '证明题': '证明推理',
+            '编程题': '编程实现'
         }
         
         for qtype, total_score in type_scores.items():
@@ -347,10 +347,10 @@ class ChartComponents:
         
         # 根据题目类型设置颜色
         type_colors = {
-            'concept': self.colors['primary'],
-            'calculation': self.colors['success'],
-            'proof': self.colors['warning'],
-            'programming': self.colors['info']
+            '概念题': self.colors['primary'],
+            '计算题': self.colors['success'],
+            '证明题': self.colors['warning'],
+            '编程题': self.colors['info']
         }
         
         fig = go.Figure()
@@ -362,7 +362,7 @@ class ChartComponents:
                 x=[difficulties[i] for i in type_indices],
                 y=[accuracies[i] for i in type_indices],
                 mode='markers',
-                name=qtype.title(),
+                name=qtype,
                 text=[question_ids[i] for i in type_indices],
                 marker=dict(
                     size=12,

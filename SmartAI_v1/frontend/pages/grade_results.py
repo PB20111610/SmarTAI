@@ -23,12 +23,35 @@ selected_job_id = st.session_state.get("selected_job_id", None)
 
 # Check if we have job records
 if "jobs" not in st.session_state or not st.session_state.jobs:
-    st.warning("当前没有批改任务记录。")
-    st.page_link("pages/stu_preview.py", label="返回学生作业总览", icon="📖")
-    st.stop()
+    # Check if we have a current job from wait_ai_grade page
+    if "current_job_id" in st.session_state:
+        # Create a temporary job record
+        temp_job_id = st.session_state.current_job_id
+        st.session_state.jobs = {temp_job_id: {"name": "最近批改任务", "submitted_at": "刚刚"}}
+        selected_job_id = temp_job_id
+        # Clean up the temporary job ID
+        del st.session_state.current_job_id
+    else:
+        st.warning("当前没有批改任务记录。")
+        st.page_link("pages/stu_preview.py", label="返回学生作业总览", icon="📖")
+        st.stop()
 
 # --- 页面内容 ---
 st.title("📊 AI批改结果")
+
+# Add debug button
+if st.button("调试：检查所有任务"):
+    from frontend_utils.data_loader import check_all_jobs
+    all_jobs = check_all_jobs()
+    st.write("所有任务状态:", all_jobs)
+
+# 映射题目类型：从内部类型到中文显示名称
+type_display_mapping = {
+    "concept": "概念题",
+    "calculation": "计算题", 
+    "proof": "证明题",
+    "programming": "编程题"
+}
 
 # Get job IDs
 job_ids = list(st.session_state.jobs.keys())
@@ -39,8 +62,12 @@ else:
     # Otherwise, let the user select a job
     if selected_job_id and selected_job_id in st.session_state.jobs:
         selected_job = selected_job_id
-        # Clear the selected job ID from session state
-        del st.session_state.selected_job_id
+        # Don't clear the selected job ID from session state, keep it for other pages
+        # del st.session_state.selected_job_id
+    elif "current_job_id" in st.session_state and st.session_state.current_job_id in st.session_state.jobs:
+        selected_job = st.session_state.current_job_id
+        # Clean up the temporary job ID
+        del st.session_state.current_job_id
     else:
         selected_job = st.selectbox(
             "选择一个批改任务",
@@ -55,14 +82,18 @@ else:
         st.write(f"提交时间: {task_info.get('submitted_at', '未知时间')}")
         
         # 添加按钮导航到评分报告和可视化页面
-        col1, col2 = st.columns(2)
+        col1, col2, col3 = st.columns(3)
         with col1:
+            if st.button("🏠 返回首页", use_container_width=True):
+                st.switch_page("main.py")
+        
+        with col2:
             if st.button("📊 查看评分报告", use_container_width=True):
                 # Set the selected job ID in session state for the score report page
                 st.session_state.selected_job_id = selected_job
                 st.switch_page("pages/score_report.py")
         
-        with col2:
+        with col3:
             if st.button("📈 查看可视化分析", use_container_width=True):
                 # Set the selected job ID in session state for the visualization page
                 st.session_state.selected_job_id = selected_job
@@ -100,9 +131,18 @@ else:
                         total_max_score = 0
                         
                         for correction in corrections:
+                            # 直接使用返回的类型，如果已经是中文则直接使用，否则进行映射
+                            question_type = correction["type"]
+                            if question_type in type_display_mapping:
+                                display_type = type_display_mapping[question_type]
+                            elif question_type in type_display_mapping.values():
+                                display_type = question_type
+                            else:
+                                display_type = "概念题"  # 默认类型
+                            
                             data.append({
                                 "题目ID": correction["q_id"],
-                                "题目类型": correction["type"],
+                                "题目类型": display_type,  # 使用中文显示类型
                                 "得分": f"{correction['score']:.1f}",
                                 "满分": f"{correction['max_score']:.1f}",
                                 "置信度": f"{correction['confidence']:.2f}",
@@ -129,9 +169,18 @@ else:
                     total_max_score = 0
                     
                     for correction in corrections:
+                        # 直接使用返回的类型，如果已经是中文则直接使用，否则进行映射
+                        question_type = correction["type"]
+                        if question_type in type_display_mapping:
+                            display_type = type_display_mapping[question_type]
+                        elif question_type in type_display_mapping.values():
+                            display_type = question_type
+                        else:
+                            display_type = "概念题"  # 默认类型
+                        
                         data.append({
                             "题目ID": correction["q_id"],
-                            "题目类型": correction["type"],
+                            "题目类型": display_type,  # 使用中文显示类型
                             "得分": f"{correction['score']:.1f}",
                             "满分": f"{correction['max_score']:.1f}",
                             "置信度": f"{correction['confidence']:.2f}",

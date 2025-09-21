@@ -109,6 +109,48 @@ h2, h3 {
     border-left: 8px solid #0077B6 !important; /* 强制显示左侧蓝色条 */
 }
 
+/* --- 功能卡片样式 --- */
+.feature-card {
+    background: white;
+    border-radius: 15px;
+    box-shadow: 0 8px 25px rgba(0,0,0,0.1);
+    text-align: center;
+    transition: all 0.3s ease;
+    border-top: 4px solid #1E3A8A;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.feature-card:hover {
+    transform: translateY(-5px);
+    box-shadow: 0 15px 35px rgba(0,0,0,0.15);
+}
+
+.feature-icon {
+    font-size: 3rem;
+    margin: 1rem 0;
+}
+
+.feature-title {
+    font-size: 1.5rem;
+    font-weight: 700;
+    color: #1E3A8A;
+    margin-bottom: 1rem;
+}
+
+.feature-description {
+    color: #64748B;
+    line-height: 1.6;
+    margin-bottom: 1.5rem;
+    flex-grow: 1;
+}
+
+.feature-card-buttons {
+    margin-top: auto;
+    padding: 0 1rem 1rem 1rem;
+}
+
 /* 文件上传区域 */
 [data-testid="stFileUploader"] {
     border: 2px dashed #B0C4DE; /* 淡蓝色虚线 */

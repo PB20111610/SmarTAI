@@ -2,15 +2,16 @@
 Proof question correction node implementation.
 """
 import structlog
-import re  # Using standard re instead of regex_module
+import re
 import os
 import json
 import argparse
-from typing import List, Dict, Any
+from typing import Dict, Any, List
 from pydantic import BaseModel
 
 from backend.models import Correction, StepScore
 from backend.correct.prompt_utils import prepare_proof_prompt
+from backend.dependencies import get_llm
 
 # Setup logger
 logger = structlog.get_logger()
@@ -20,63 +21,26 @@ OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "8dcdf3e9238f48f4ae329f638e66dfe2.H
 OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
 OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4")
 
+# Global LLM client for connection pooling
+LLM_CLIENT = None
 
-class Step(BaseModel):
+def get_llm_client():
+    """Get or create a shared LLM client for connection pooling."""
+    global LLM_CLIENT
+    if LLM_CLIENT is None:
+        LLM_CLIENT = get_llm()
+    return LLM_CLIENT
+
+class ProofStep(BaseModel):
+    """Model for a proof step."""
     step_no: int
     content: str
 
-
 class AnswerUnit(BaseModel):
-    q_id: str = "q1"
-    text: str = ""
-    question: Dict[str, Any] = {}
-
-
-class Question(BaseModel):
-    type: str = "proof"
-
-
-# Mock StepSplitter - to be replaced with actual implementation
-class StepSplitter:
-    @staticmethod
-    def split(proof: str) -> List[Step]:
-        """
-        Split a proof into individual steps.
-        
-        Args:
-            proof: The proof text to split
-            
-        Returns:
-            List[Step]: List of proof steps
-        """
-        # Simple implementation that splits by "Step" or similar markers
-        steps = []
-        lines = proof.split('.')
-        for i, line in enumerate(lines):
-            if line.strip():
-                steps.append(Step(step_no=i+1, content=line.strip()))
-        return steps
-
-
-# Mock KnowledgeRetriever - to be replaced with actual implementation
-class KnowledgeRetriever:
-    def __init__(self, top_k: int = 5):
-        self.top_k = top_k
-    
-    def verify_step(self, step_content: str) -> bool:
-        """
-        Verify if a proof step is correct.
-        
-        Args:
-            step_content: The content of the step to verify
-            
-        Returns:
-            bool: True if the step is correct, False otherwise
-        """
-        # Mock implementation - in reality, this would use some logic or LLM
-        # For demonstration, we'll assume steps containing "assume" or "thus" are correct
-        return "assume" in step_content.lower() or "thus" in step_content.lower()
-
+    """Model for proof answer unit."""
+    q_id: str
+    text: str
+    steps: List[ProofStep]
 
 def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
     """
@@ -127,14 +91,12 @@ def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
         # Extract overall_score with more flexible pattern matching
         score_match = re.search(r'"overall_score"\s*:\s*([0-9.]+)', response_text)
         if score_match:
-            llm_response["overall_score"] = float(score_match.group(1))
+            llm_response["score"] = float(score_match.group(1))
         else:
-            # Try to extract any score field as fallback
-            any_score_match = re.search(r'"score"\s*:\s*([0-9.]+)', response_text)
-            if any_score_match:
-                llm_response["overall_score"] = float(any_score_match.group(1))
-            else:
-                llm_response["overall_score"] = 5.0
+            # Try alternative field name
+            score_match = re.search(r'"score"\s*:\s*([0-9.]+)', response_text)
+            if score_match:
+                llm_response["score"] = float(score_match.group(1))
         
         # Extract max_score
         max_score_match = re.search(r'"max_score"\s*:\s*([0-9.]+)', response_text)
@@ -174,7 +136,7 @@ def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
     
     # Final fallback
     llm_response = {
-        "overall_score": 5.0,
+        "score": 5.0,
         "max_score": 10.0,
         "confidence": 0.8,
         "comment": "默认评分",
@@ -185,15 +147,15 @@ def parse_llm_json_response(response_text: str) -> Dict[str, Any]:
                 response_keys=list(llm_response.keys()) if isinstance(llm_response, dict) else "Not a dict")
     return llm_response
 
-
-def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0) -> Correction:
+def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0, llm=None) -> Correction:
     """
     Proof question correction node.
     
     Args:
-        answer_unit: The answer unit containing the student's proof
+        answer_unit: The answer unit containing the student's proof steps
         rubric: The grading rubric
         max_score: The maximum score for this question
+        llm: Optional LLM client to use for processing (if None, uses shared client)
         
     Returns:
         Correction: The correction result
@@ -201,29 +163,34 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
     logger.info("proof_node_start", q_id=answer_unit.get("q_id", "unknown"))
     
     # Convert dict to AnswerUnit model
+    # Handle the case where steps might be dictionaries instead of ProofStep objects
+    if "steps" in answer_unit and isinstance(answer_unit["steps"], list):
+        # Convert dictionary steps to ProofStep objects
+        proof_steps = []
+        for step in answer_unit["steps"]:
+            if isinstance(step, dict):
+                # Convert dict to ProofStep
+                proof_steps.append(ProofStep(**step))
+            else:
+                # Assume it's already a ProofStep object
+                proof_steps.append(step)
+        answer_unit["steps"] = proof_steps
+    
     answer_unit_model = AnswerUnit(**answer_unit)
     
-    # Step 1: Split proof into steps
-    splitter = StepSplitter()
-    steps = splitter.split(answer_unit_model.text)
+    # Step 1: Extract proof steps
+    steps = answer_unit_model.steps
     
-    # Step 2: Verify each step
+    # Step 2: Validate each step (simplified validation)
     step_scores = []
-    total_score = 0.0
     total_confidence = 0.0
     
-    retriever = KnowledgeRetriever()
-    
     for step in steps:
-        # Verify step correctness
-        is_correct = retriever.verify_step(step.content)
-        
-        # Assign score (evenly distribute max_score among steps)
-        step_score = max_score / len(steps) if is_correct else 0.0
-        total_score += step_score
-        
-        # Confidence for each step (mock value)
-        step_confidence = 0.9 if is_correct else 0.3
+        # In a real implementation, you would use some NLP technique or LLM to validate each step
+        # For now, we'll just assume all steps are correct with 0.9 confidence
+        is_correct = True
+        step_confidence = 0.9
+        step_score = max_score / len(steps) if steps else 0.0
         total_confidence += step_confidence
         
         step_scores.append(
@@ -247,26 +214,38 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
         # For now, we'll just log that we would use it
         logger.info("proof_prompt_prepared", prompt=prompt[:100] + "..." if len(prompt) > 100 else prompt)
         
-        # Step 5: Call LLM with the prepared prompt
+        # Step 5: Call LLM with the prepared prompt using connection pooling
         try:
-            # Initialize the LLM (using Zhipu AI as in prob_preview.py)
-            from langchain_openai import ChatOpenAI
+            # Use provided LLM client or get shared LLM client for connection pooling
+            if llm is None:
+                llm = get_llm_client()
             from langchain.schema import HumanMessage
             
-            llm = ChatOpenAI(
-                model=OPENAI_MODEL,
-                temperature=0.0,
-                api_key=OPENAI_API_KEY,
-                base_url=OPENAI_API_BASE,
-            )
-            # Use invoke method instead of direct call to avoid deprecation warning
-            response = llm.invoke([HumanMessage(content=prompt)])
-            
-            # Log the raw response for debugging
-            logger.info("llm_raw_response", content=response.content[:500] + "..." if len(response.content) > 500 else response.content)
-            
-            # Parse the JSON response
-            llm_response = parse_llm_json_response(response.content)
+            # Add retry logic for LLM calls
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    # Use invoke method instead of direct call to avoid deprecation warning
+                    response = llm.invoke([HumanMessage(content=prompt)])
+                    
+                    # Log the raw response for debugging
+                    logger.info("llm_raw_response", content=response.content[:500] + "..." if len(response.content) > 500 else response.content)
+                    
+                    # Parse the JSON response
+                    llm_response = parse_llm_json_response(response.content)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    retry_count += 1
+                    logger.warning(f"LLM call attempt {retry_count} failed: {str(e)}")
+                    if retry_count >= max_retries:
+                        raise  # Re-raise the exception if all retries failed
+                    # Wait a bit before retrying
+                    import time
+                    time.sleep(2)  # Increased delay to reduce API load
+            else:
+                # This should not happen, but just in case
+                raise Exception("LLM call failed after all retries")
             
             # Create step scores from LLM response
             step_scores = []
@@ -285,7 +264,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
                         logger.warning("step_creation_failed", error=str(step_creation_error), step_data=step)
             
             # Calculate total score and confidence
-            total_score = llm_response.get("overall_score", sum(step.score for step in step_scores) if step_scores else 5.0)
+            total_score = llm_response.get("score", sum(step.score for step in step_scores) if step_scores else 5.0)
             overall_confidence = llm_response.get("confidence", 0.8)
             comment = llm_response.get("comment", f"证明过程包含 {len(step_scores)} 个步骤")
             response_max_score = llm_response.get("max_score", max_score)  # Use AI response max_score if available
@@ -298,16 +277,16 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
             try:
                 correction = Correction(
                     q_id=answer_unit_model.q_id,
-                    type="proof",
+                    type="证明题",
                     score=total_score,
-                    max_score=response_max_score,  # Use the AI response max_score
+                    max_score=response_max_score,
                     confidence=overall_confidence,
                     comment=comment,
                     steps=step_scores
                 )
             except Exception as correction_error:
                 logger.error("correction_creation_failed", error=str(correction_error), 
-                           q_id=answer_unit_model.q_id, type="proof", score=total_score, 
+                           q_id=answer_unit_model.q_id, type="证明题", score=total_score, 
                            max_score=max_score, confidence=overall_confidence,
                            comment=comment,
                            steps_count=len(step_scores))
@@ -321,7 +300,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
             # Create a simple rule-based correction as fallback
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="proof",
+                type="证明题",
                 score=5.0,  # Default score
                 max_score=max_score,
                 confidence=0.5,  # Default confidence
@@ -339,11 +318,11 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
     except FileNotFoundError:
         logger.warning("proof_prompt_template_not_found", template_path="backend/prompts/proof.txt")
         # Create a simple rule-based correction as fallback with a default prompt
-        steps_str = "\n".join([f"步骤{i+1}: {step.content}" for i, step in enumerate(steps)])
+        steps_str = "\n".join([f"{step.step_no}. {step.content}" for step in steps])
         default_prompt = f"""
         你是一个数学老师，需要对学生的证明题解答进行评分。
 
-        证明步骤：
+        学生证明步骤：
         {steps_str}
 
         评分标准：
@@ -368,17 +347,30 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
         
         # Try to call LLM with default prompt
         try:
-            from langchain_openai import ChatOpenAI
+            # Use provided LLM client or get shared LLM client for connection pooling
+            if llm is None:
+                llm = get_llm_client()
             from langchain.schema import HumanMessage
             
-            llm = ChatOpenAI(
-                model=OPENAI_MODEL,
-                temperature=0.0,
-                api_key=OPENAI_API_KEY,
-                base_url=OPENAI_API_BASE,
-            )
-            response = llm.invoke([HumanMessage(content=default_prompt)])
-            llm_response = parse_llm_json_response(response.content)
+            # Add retry logic for LLM calls
+            max_retries = 3
+            retry_count = 0
+            while retry_count < max_retries:
+                try:
+                    response = llm.invoke([HumanMessage(content=default_prompt)])
+                    llm_response = parse_llm_json_response(response.content)
+                    break  # Success, exit retry loop
+                except Exception as e:
+                    retry_count += 1
+                    logger.warning(f"Fallback LLM call attempt {retry_count} failed: {str(e)}")
+                    if retry_count >= max_retries:
+                        raise  # Re-raise the exception if all retries failed
+                    # Wait a bit before retrying
+                    import time
+                    time.sleep(2)  # Increased delay to reduce API load
+            else:
+                # This should not happen, but just in case
+                raise Exception("Fallback LLM call failed after all retries")
             
             # Create step scores from LLM response
             step_scores = []
@@ -397,7 +389,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
                         logger.warning("step_creation_failed", error=str(step_creation_error), step_data=step)
             
             # Calculate total score and confidence
-            total_score = llm_response.get("overall_score", sum(step.score for step in step_scores) if step_scores else 5.0)
+            total_score = llm_response.get("score", sum(step.score for step in step_scores) if step_scores else 5.0)
             overall_confidence = llm_response.get("confidence", 0.8)
             comment = llm_response.get("comment", f"证明过程包含 {len(step_scores)} 个步骤")
             response_max_score = llm_response.get("max_score", max_score)  # Use AI response max_score if available
@@ -409,7 +401,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
             # Create correction object with LLM results
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="proof",
+                type="证明题",
                 score=total_score,
                 max_score=response_max_score,
                 confidence=overall_confidence,
@@ -422,7 +414,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
             # Create a simple rule-based correction as final fallback
             correction = Correction(
                 q_id=answer_unit_model.q_id,
-                type="proof",
+                type="证明题",
                 score=5.0,  # Default score
                 max_score=max_score,
                 confidence=0.5,  # Default confidence
@@ -442,7 +434,7 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
         # Create a simple rule-based correction as fallback
         correction = Correction(
             q_id=answer_unit_model.q_id,
-            type="proof",
+            type="证明题",
             score=5.0,  # Default score
             max_score=max_score,
             confidence=0.5,  # Default confidence
@@ -457,7 +449,6 @@ def proof_node(answer_unit: Dict[str, Any], rubric: str, max_score: float = 10.0
             ]
         )
         return correction
-
 
 def process_proof_from_files(input_file: str, rubric_file: str, output_file: str, max_score: float = 10.0):
     """
@@ -491,7 +482,6 @@ def process_proof_from_files(input_file: str, rubric_file: str, output_file: str
     
     logger.info("proof_processing_complete", input_file=input_file, output_file=output_file)
     return correction
-
 
 if __name__ == "__main__":
     # Set up argument parser for file-based processing

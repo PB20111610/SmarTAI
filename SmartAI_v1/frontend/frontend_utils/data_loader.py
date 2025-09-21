@@ -87,11 +87,28 @@ class AssignmentStats:
         """计算提交率"""
         return (self.submitted_count / self.total_students) * 100 if self.total_students > 0 else 0
 
+def check_all_jobs() -> Dict[str, Any]:
+    """
+    Check all jobs for debugging purposes
+    """
+    try:
+        response = requests.get(
+            f"{st.session_state.backend}/ai_grading/all_jobs",
+            timeout=10
+        )
+        response.raise_for_status()
+        return response.json()
+    except Exception as e:
+        return {"error": f"Failed to check jobs: {str(e)}"}
+
 def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
     """
     从AI批改系统加载实际数据
     """
     try:
+        # Debug information
+        print(f"Requesting AI grading data for job {job_id}")
+        
         # 获取批改结果
         response = requests.get(
             f"{st.session_state.backend}/ai_grading/grade_result/{job_id}",
@@ -100,8 +117,21 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
         response.raise_for_status()
         result = response.json()
         
+        # Debug information
+        print(f"Loading AI grading data for job {job_id}")
+        print(f"Result status: {result.get('status', 'no status')}")
+        print(f"Full result: {result}")
+        
         if result.get("status") != "completed":
             return {"error": "批改任务未完成"}
+        
+        # 映射题目类型：从内部类型到中文显示名称
+        type_display_mapping = {
+            "concept": "概念题",
+            "calculation": "计算题", 
+            "proof": "证明题",
+            "programming": "编程题"
+        }
         
         # 转换AI批改数据为可视化页面所需格式
         if "results" in result:  # Batch grading results
@@ -121,19 +151,18 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
                 # 转换题目数据
                 questions = []
                 for correction in corrections:
-                    # 映射题目类型
-                    type_mapping = {
-                        "概念题": "concept",
-                        "计算题": "calculation", 
-                        "证明题": "proof",
-                        "编程题": "programming"
-                    }
-                    
-                    question_type = type_mapping.get(correction["type"], "concept")
+                    # 直接使用返回的类型，如果已经是中文则直接使用，否则进行映射
+                    question_type = correction["type"]
+                    if question_type in type_display_mapping:
+                        display_type = type_display_mapping[question_type]
+                    elif question_type in type_display_mapping.values():
+                        display_type = question_type
+                    else:
+                        display_type = "概念题"  # 默认类型
                     
                     question = {
                         "question_id": correction["q_id"],
-                        "question_type": question_type,
+                        "question_type": display_type,  # 使用中文显示类型
                         "score": correction["score"],
                         "max_score": correction["max_score"],
                         "confidence": correction["confidence"],
@@ -194,9 +223,21 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
                 correct_rate = stats["correct_count"] / stats["count"] if stats["count"] > 0 else 0
                 difficulty = 1 - correct_rate  # 简单反向映射
                 
+                # 获取题目类型
+                # 查找该题目的类型（从统计信息中获取第一个匹配的）
+                question_type = "概念题"  # 默认类型
+                for correction in all_corrections:
+                    if correction["q_id"] == q_id:
+                        question_type = correction["type"]
+                        if question_type in type_display_mapping:
+                            question_type = type_display_mapping[question_type]
+                        elif question_type not in type_display_mapping.values():
+                            question_type = "概念题"  # 默认类型
+                        break
+                
                 analysis = QuestionAnalysis(
                     question_id=q_id,
-                    question_type="concept",  # 默认类型，实际应从题目数据获取
+                    question_type=question_type,  # 使用中文显示类型
                     topic=f"题目{q_id}",
                     difficulty=difficulty,
                     correct_rate=correct_rate,
@@ -243,19 +284,18 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
             # 转换题目数据
             questions = []
             for correction in corrections:
-                # 映射题目类型
-                type_mapping = {
-                    "概念题": "concept",
-                    "计算题": "calculation", 
-                    "证明题": "proof",
-                    "编程题": "programming"
-                }
-                
-                question_type = type_mapping.get(correction["type"], "concept")
+                # 直接使用返回的类型，如果已经是中文则直接使用，否则进行映射
+                question_type = correction["type"]
+                if question_type in type_display_mapping:
+                    display_type = type_display_mapping[question_type]
+                elif question_type in type_display_mapping.values():
+                    display_type = question_type
+                else:
+                    display_type = "概念题"  # 默认类型
                 
                 question = {
                     "question_id": correction["q_id"],
-                    "question_type": question_type,
+                    "question_type": display_type,  # 使用中文显示类型
                     "score": correction["score"],
                     "max_score": correction["max_score"],
                     "confidence": correction["confidence"],
@@ -290,9 +330,18 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
             # 生成题目分析数据（基于单个学生数据，统计意义有限）
             question_analysis = []
             for correction in corrections:
+                # 获取题目类型
+                question_type = correction["type"]
+                if question_type in type_display_mapping:
+                    display_type = type_display_mapping[question_type]
+                elif question_type in type_display_mapping.values():
+                    display_type = question_type
+                else:
+                    display_type = "概念题"  # 默认类型
+                
                 analysis = QuestionAnalysis(
                     question_id=correction["q_id"],
-                    question_type="concept",  # 默认类型
+                    question_type=display_type,  # 使用中文显示类型
                     topic=f"题目{correction['q_id']}",
                     difficulty=1 - (correction["score"] / correction["max_score"]),
                     correct_rate=correction["score"] / correction["max_score"],

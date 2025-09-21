@@ -5,6 +5,8 @@ import zipfile
 import rarfile
 import py7zr
 import tarfile
+import concurrent.futures
+from typing import List, Dict
 
 def hw_file2text(file): #TODO: file to text with OCR, or process with AI directly
     pass #这个感觉需要lang graph就是需要一个ai对直接读取+OCR和AI直接识别的综合
@@ -47,16 +49,29 @@ def extract_files_from_archive(file_bytes: bytes, filename: str) -> List[Dict[st
     # 1. 处理 .zip 文件
     if filename.lower().endswith('.zip'):
         with zipfile.ZipFile(file_in_memory, 'r') as zf:
-            for info in zf.infolist():
-                # 确保是文件而不是目录，并且是有效文件
-                if not info.is_dir() and is_valid_file(info.filename):
-                    # 从压缩文件名中提取纯文件名，避免路径问题
-                    clean_filename = info.filename.split('/')[-1]
-                    content_bytes = zf.read(info.filename)
-                    files_data.append({
-                        "filename": clean_filename,
-                        "content": decode_text_bytes(content_bytes)
-                    })
+            # Get all valid file info first
+            valid_files = [info for info in zf.infolist() 
+                          if not info.is_dir() and is_valid_file(info.filename)]
+            
+            # Function to process a single file
+            def process_zip_file(info):
+                clean_filename = info.filename.split('/')[-1]
+                content_bytes = zf.read(info.filename)
+                return {
+                    "filename": clean_filename,
+                    "content": decode_text_bytes(content_bytes)
+                }
+            
+            # Process files in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(valid_files), 8)) as executor:
+                future_to_file = {executor.submit(process_zip_file, info): info for info in valid_files}
+                for future in concurrent.futures.as_completed(future_to_file):
+                    try:
+                        result = future.result()
+                        files_data.append(result)
+                    except Exception as e:
+                        info = future_to_file[future]
+                        print(f"Error processing file {info.filename}: {e}")
 
     # 2. 处理 .rar 文件
     elif filename.lower().endswith('.rar'):
@@ -65,14 +80,29 @@ def extract_files_from_archive(file_bytes: bytes, filename: str) -> List[Dict[st
         # rarfile 可能会因缺少 unrar 工具而抛出异常
         try:
             with rarfile.RarFile(file_in_memory, 'r') as rf:
-                for info in rf.infolist():
-                    if not info.is_dir() and is_valid_file(info.filename):
-                        clean_filename = info.filename.split('/')[-1]
-                        content_bytes = rf.read(info.filename)
-                        files_data.append({
-                            "filename": clean_filename,
-                            "content": decode_text_bytes(content_bytes)
-                        })
+                # Get all valid file info first
+                valid_files = [info for info in rf.infolist() 
+                              if not info.is_dir() and is_valid_file(info.filename)]
+                
+                # Function to process a single file
+                def process_rar_file(info):
+                    clean_filename = info.filename.split('/')[-1]
+                    content_bytes = rf.read(info.filename)
+                    return {
+                        "filename": clean_filename,
+                        "content": decode_text_bytes(content_bytes)
+                    }
+                
+                # Process files in parallel
+                with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(valid_files), 8)) as executor:
+                    future_to_file = {executor.submit(process_rar_file, info): info for info in valid_files}
+                    for future in concurrent.futures.as_completed(future_to_file):
+                        try:
+                            result = future.result()
+                            files_data.append(result)
+                        except Exception as e:
+                            info = future_to_file[future]
+                            print(f"Error processing file {info.filename}: {e}")
         except rarfile.UNRARError as e:
             # 这是一个常见的服务器配置问题，提供明确的错误信息
             raise RuntimeError(f"处理RAR文件失败: {e}. 请确保服务器上已安装 'unrar' 命令行工具。")
@@ -84,31 +114,61 @@ def extract_files_from_archive(file_bytes: bytes, filename: str) -> List[Dict[st
         with py7zr.SevenZipFile(file_in_memory, 'r') as szf:
             # readall() 返回一个 {filename: BytesIO_object} 的字典
             all_files = szf.readall()
-            for name, bio in all_files.items():
-                if is_valid_file(name):
-                    clean_filename = name.split('/')[-1]
-                    content_bytes = bio.read()
-                    files_data.append({
-                        "filename": clean_filename,
-                        "content": decode_text_bytes(content_bytes)
-                    })
+            valid_files = {name: bio for name, bio in all_files.items() if is_valid_file(name)}
+            
+            # Function to process a single file
+            def process_7z_file(name_and_bio):
+                name, bio = name_and_bio
+                clean_filename = name.split('/')[-1]
+                content_bytes = bio.read()
+                return {
+                    "filename": clean_filename,
+                    "content": decode_text_bytes(content_bytes)
+                }
+            
+            # Process files in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(valid_files), 8)) as executor:
+                future_to_file = {executor.submit(process_7z_file, item): item for item in valid_files.items()}
+                for future in concurrent.futures.as_completed(future_to_file):
+                    try:
+                        result = future.result()
+                        files_data.append(result)
+                    except Exception as e:
+                        item = future_to_file[future]
+                        print(f"Error processing file {item[0]}: {e}")
 
     # 4. 处理 .tar.* 系列文件
     elif filename.lower().endswith(('.tar', '.tar.gz', '.tgz', '.tar.bz2', '.tbz2')):
         # 'r:*' 模式可以自动检测 tar 的压缩类型 (gz, bz2, etc.)
         with tarfile.open(fileobj=file_in_memory, mode='r:*') as tf:
-            for member in tf.getmembers():
-                # 确保是文件而不是目录
-                if member.isfile() and is_valid_file(member.name):
-                    clean_filename = member.name.split('/')[-1]
-                    # 提取文件对象并读取内容
-                    file_obj = tf.extractfile(member)
-                    if file_obj:
-                        content_bytes = file_obj.read()
-                        files_data.append({
-                            "filename": clean_filename,
-                            "content": decode_text_bytes(content_bytes)
-                        })
+            # Get all valid members first
+            valid_members = [member for member in tf.getmembers() 
+                           if member.isfile() and is_valid_file(member.name)]
+            
+            # Function to process a single file
+            def process_tar_file(member):
+                clean_filename = member.name.split('/')[-1]
+                # 提取文件对象并读取内容
+                file_obj = tf.extractfile(member)
+                if file_obj:
+                    content_bytes = file_obj.read()
+                    return {
+                        "filename": clean_filename,
+                        "content": decode_text_bytes(content_bytes)
+                    }
+                return None
+            
+            # Process files in parallel
+            with concurrent.futures.ThreadPoolExecutor(max_workers=min(len(valid_members), 8)) as executor:
+                future_to_file = {executor.submit(process_tar_file, member): member for member in valid_members}
+                for future in concurrent.futures.as_completed(future_to_file):
+                    try:
+                        result = future.result()
+                        if result:
+                            files_data.append(result)
+                    except Exception as e:
+                        member = future_to_file[future]
+                        print(f"Error processing file {member.name}: {e}")
 
     # 5. 如果不是已知的压缩包，则作为单个文件处理
     else:

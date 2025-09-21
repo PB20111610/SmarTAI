@@ -33,9 +33,14 @@ def init_session_state():
     # Check if we have a selected job for AI grading data
     if 'selected_job_id' in st.session_state and st.session_state.selected_job_id:
         # Load AI grading data
-        if 'ai_grading_data' not in st.session_state:
-            with st.spinner("正在加载AI批改数据..."):
-                st.session_state.ai_grading_data = load_ai_grading_data(st.session_state.selected_job_id)
+        with st.spinner("正在加载AI批改数据..."):
+            ai_data = load_ai_grading_data(st.session_state.selected_job_id)
+            if "error" not in ai_data:
+                st.session_state.ai_grading_data = ai_data
+            else:
+                st.error(f"加载AI批改数据失败: {ai_data['error']}")
+                # Fallback to default data
+                st.session_state.sample_data = create_default_data()
     else:
         # Create default data if no job is selected
         if 'sample_data' not in st.session_state:
@@ -80,17 +85,21 @@ def create_default_data():
 
 def render_header():
     """渲染页面头部"""
-    col1, col2, col3 = st.columns([2, 3, 2])
+    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
     
     with col1:
         if st.button("🏠 返回首页", type="secondary"):
             st.switch_page("main.py")
     
     with col2:
+        if st.button("📊 批改结果", type="secondary"):
+            st.switch_page("pages/grade_results.py")
+    
+    with col3:
         st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>📊 评分报告</h1>", 
                    unsafe_allow_html=True)
     
-    with col3:
+    with col4:
         if st.button("📈 成绩展示", type="primary"):
             st.switch_page("pages/visualization.py")
 
@@ -216,9 +225,9 @@ def main():
     
     # 获取数据 - 优先使用AI批改数据，如果没有则使用示例数据
     if 'ai_grading_data' in st.session_state and st.session_state.ai_grading_data:
-        students = st.session_state.ai_grading_data['student_scores']
+        students = st.session_state.ai_grading_data.get('student_scores', [])
     else:
-        students = st.session_state.sample_data['student_scores']
+        students = st.session_state.sample_data.get('student_scores', [])
     
     # 渲染学生选择
     selected_student = render_student_selection(students)
