@@ -1,7 +1,7 @@
 # app/main.py
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
-from backend.routers import prob_preview, hw_preview, ai_grading
+from backend.routers import prob_preview, hw_preview, ai_grading, human_edit
 # from app.db import init_db
 import logging
 
@@ -17,6 +17,7 @@ def create_app() -> FastAPI:
     app.include_router(prob_preview.router)   # 会自动挂载到 /file_preview（见 file_preview.py）
     app.include_router(hw_preview.router)   # 会自动挂载到 /file_preview（见 file_preview.py）
     app.include_router(ai_grading.router)   # 挂载到 /ai_grading
+    app.include_router(human_edit.router)
 
     # 允许所有来源的跨域请求，便于本地开发
     app.add_middleware(
