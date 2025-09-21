@@ -6,7 +6,6 @@ import rarfile
 import py7zr
 import tarfile
 import concurrent.futures
-from typing import List, Dict
 
 def hw_file2text(file): #TODO: file to text with OCR, or process with AI directly
     pass #这个感觉需要lang graph就是需要一个ai对直接读取+OCR和AI直接识别的综合
