@@ -60,6 +60,7 @@ def render_question_overview():
                 with col1:
                     if st.button("✅ 保存题干", key=f"save_stem_btn_{q_id}", type="primary", use_container_width=True):
                         st.session_state.prob_data[q_id]['stem'] = new_stem
+                        st.session_state.prob_changed = True
                         st.session_state[edit_stem_key] = False
                         st.rerun()
                 with col2:
@@ -76,6 +77,7 @@ def render_question_overview():
                 with col1:
                     if st.button("✅ 保存标准", key=f"save_criterion_btn_{q_id}", type="primary", use_container_width=True):
                         st.session_state.prob_data[q_id]['criterion'] = new_criterion
+                        st.session_state.prob_changed = True
                         st.session_state[edit_criterion_key] = False
                         st.rerun()
                 with col2:
@@ -98,6 +100,7 @@ def render_question_overview():
                     # 如果类型发生变化，直接更新
                     if new_type != st.session_state.prob_data[q_id]['type']:
                         st.session_state.prob_data[q_id]['type'] = new_type
+                        st.session_state.prob_changed = True
                         st.rerun()
 
                 with col2:
@@ -143,6 +146,8 @@ with col_button:
         on_click=start_ai_grading_and_navigate, 
         use_container_width=True # 让按钮填满列宽，视觉效果更好
     ):
+        update_prob()
+        update_ans()
         st.switch_page("pages/hw_upload.py")   # 跳转到你的目标页面
 
 inject_pollers_for_active_jobs()

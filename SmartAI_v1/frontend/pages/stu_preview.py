@@ -159,6 +159,8 @@ with col_button:
         on_click=start_ai_grading_and_navigate, 
         use_container_width=True # 让按钮填满列宽，视觉效果更好
     ):
+        update_prob()
+        update_ans()
         st.switch_page("pages/wait_ai_grade.py")   # 跳转到你的目标页面
 
 inject_pollers_for_active_jobs()

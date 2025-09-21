@@ -2,6 +2,7 @@
 import streamlit as st
 import streamlit.components.v1 as components
 import json # 引入 json 库用于将 Python 列表转换为 JS 数组
+import requests
 
 def load_custom_css(file_path=None):
     """
@@ -38,6 +39,48 @@ def initialize_session_state():
         # 在这里硬编码你的后端地址
         st.session_state.backend = "http://localhost:8000" 
         
+    if 'prob_changed' not in st.session_state:
+        st.session_state.prob_changed = False
+
+    if 'ans_changed' not in st.session_state:
+        st.session_state.ans_changed = False
+        
+def update_prob():
+    if st.session_state.get('prob_changed', False):
+        st.info("检测到题目数据已修改，正在更新存储到后端...") # 友好提示
+        try:
+            requests.post(
+                f"{st.session_state.backend}/human_edit/problems",
+                json=st.session_state.prob_data
+            )
+            
+            print("数据已成功保存到后端！") # 在终端打印日志
+            st.toast("更改已成功保存！", icon="✅")
+
+            # 保存成功后，重置标志位
+            st.session_state.prob_changed = False
+        except Exception as e:
+            st.error(f"保存失败，错误信息: {e}")
+            print(f"Error saving to DB: {e}") # 在终端打印错误
+
+def update_ans():
+    if st.session_state.get('ans_changed', False):
+        st.info("检测到学生作答数据已修改，正在更新存储到后端...") # 友好提示
+        try:
+            requests.post(
+                f"{st.session_state.backend}/human_edit/stu_ans",
+                json=st.session_state.processed_data
+            )
+            
+            print("数据已成功保存到后端！") # 在终端打印日志
+            st.toast("更改已成功保存！", icon="✅")
+
+            # 保存成功后，重置标志位
+            st.session_state.prob_changed = False
+        except Exception as e:
+            st.error(f"保存失败，错误信息: {e}")
+            print(f"Error saving to DB: {e}") # 在终端打印错误
+
 def get_master_poller_html(jobs_json: str, backend_url: str) -> str:
     """
     生成一个“主”轮询脚本。
