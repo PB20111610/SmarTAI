@@ -1,0 +1,28 @@
+{"students":
+    [
+        {
+            "stu_id":"PB20111639",
+            "stu_name":"张三",
+            "answers":
+            [
+                {"id": "q1", "number": "1.1", "type": "概念题", "stem":"题干1", "content": "answer1", "criterion": "满分10分，答错全扣分，答对满分。"},
+                {"id": "q2", "number": "1.2", "type": "计算题", "stem":"题干2", "content": "answer2", "criterion": "满分10分，两个结果每个2分，计算过程6分"},
+                {"id": "q3", "number": "2", "type": "编程题", "stem":"题干3", "content": "answer3", "criterion": "满分10分，6个测试样例每通过一个1分，是快速排序算法4分。"},
+                {"id": "q4", "number": "3.1", "type": "证明题", "stem":"题干4", "content": "answer4", "criterion": "每步推导1分，正确证明了结论2分。"},
+                {"id": "q5", "number": "3.2", "type": "推理题", "stem":"题干5", "content": "answer5", "criterion": "每步推导1分，正确推理出了结论4分。"}
+            ]
+        },
+        {
+            "stu_id":"PB20111610",
+            "stu_name":"李四",
+            "answers":
+            [
+                {"id": "q1", "number": "1.1", "type": "概念题", "stem":"题干1", "content": "answer1", "criterion": "满分10分，答错全扣分，答对满分。"},
+                {"id": "q2", "number": "1.2", "type": "计算题", "stem":"题干2", "content": "answer2", "criterion": "满分10分，两个结果每个2分，计算过程6分"},
+                {"id": "q3", "number": "2", "type": "编程题", "stem":"题干3", "content": "answer3", "criterion": "满分10分，6个测试样例每通过一个1分，是快速排序算法4分。"},
+                {"id": "q4", "number": "3.1", "type": "证明题", "stem":"题干4", "content": "answer4", "criterion": "每步推导1分，正确证明了结论2分。"},
+                {"id": "q5", "number": "3.2", "type": "推理题", "stem":"题干5", "content": "answer5", "criterion": "每步推导1分，正确推理出了结论4分。"}
+            ]
+        }
+    ]
+}
