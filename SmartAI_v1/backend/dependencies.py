@@ -51,8 +51,7 @@ class StudentSubmission(BaseModel):
 
 # --- 独立的内存存储变量 ---
 
-# 用于存储AI生成的题目数据。
-# 它的结构将是 {"problems": [...]}, 正好是 ProblemSet dump后的样子。
+# 用于存储AI识别的题目数据。
 # 初始化为空字典。
 '''
 {
@@ -66,7 +65,7 @@ class StudentSubmission(BaseModel):
 problem_data: Dict[str, Dict[str,str]] = {}
 
 # 用于存储学生提交的数据。
-# 它的结构将是一个列表 [ {student_dict_1}, {student_dict_2} ]
+# 它的结构将是一个字典
 '''
 {
     "PB20111639":{
@@ -95,7 +94,6 @@ problem_data: Dict[str, Dict[str,str]] = {}
     },
 }
 '''
-# student_data: List[Dict[str, Any]] = []
 student_data: Dict[str,Dict[str, Any]] = {}
 
 
