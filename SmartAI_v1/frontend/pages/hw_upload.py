@@ -20,6 +20,8 @@ load_custom_css()
 
 st.page_link("main.py", label="home", icon="🏠")
 
+st.page_link("pages/problems.py", label="返回题目识别概览", icon="📝")
+
 # --- 后端服务地址 ---
 # BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/hw_upload")
 
@@ -74,7 +76,9 @@ if uploaded_hw_file is not None:
 
                 # st.session_state.processed_data = response.json()      
                 students = response.json()                            
-                st.session_state.processed_data = {stu['stu_id']: stu for stu in students.get('students', [])}   #以stu_id为key索引
+                st.session_state.processed_data = students   #以stu_id为key索引
+
+                # print(st.session_state.processed_data)
           
                 st.success("✅ 文件上传成功，后端开始处理！即将跳转至结果预览页面...")
                 time.sleep(1) # 短暂显示成功信息
