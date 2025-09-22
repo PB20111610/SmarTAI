@@ -8,7 +8,8 @@ from utils import *
 st.set_page_config(
     page_title="学生作业详情 - 智能作业核查系统",
     layout="wide",
-    page_icon="📖"
+    page_icon="📖",
+    initial_sidebar_state="expanded"  # 保留Student info侧边栏展开
 )
 
 initialize_session_state()

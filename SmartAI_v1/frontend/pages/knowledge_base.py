@@ -54,8 +54,80 @@ def load_knowledge_base_config():
                 return json.load(f)
         except Exception as e:
             st.error(f"加载知识库配置失败: {e}")
-            return {}
-    return {}
+            return get_default_knowledge_bases()
+    return get_default_knowledge_bases()
+
+def get_default_knowledge_bases():
+    """获取默认的计算机类知识库数据"""
+    current_time = datetime.now().isoformat()
+    return {
+        "kb_cs_algorithms": {
+            "id": "kb_cs_algorithms",
+            "name": "算法与数据结构高级教程",
+            "description": "涵盖高级算法设计、复杂度分析、动态规划、图算法等核心内容",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 25,
+            "total_size": 15728640,  # 约15MB
+            "files": {}
+        },
+        "kb_cs_systems": {
+            "id": "kb_cs_systems",
+            "name": "计算机系统原理与架构",
+            "description": "计算机组成原理、操作系统内核、分布式系统设计等系统级知识",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 32,
+            "total_size": 22020096,  # 约21MB
+            "files": {}
+        },
+        "kb_cs_ai": {
+            "id": "kb_cs_ai",
+            "name": "人工智能前沿技术",
+            "description": "机器学习、深度学习、自然语言处理、计算机视觉等AI核心技术",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 41,
+            "total_size": 31457280,  # 约30MB
+            "files": {}
+        },
+        "kb_cs_security": {
+            "id": "kb_cs_security",
+            "name": "网络安全与密码学",
+            "description": "信息安全理论、密码学算法、网络攻防、区块链技术等安全相关内容",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 28,
+            "total_size": 18874368,  # 约18MB
+            "files": {}
+        },
+        "kb_cs_database": {
+            "id": "kb_cs_database",
+            "name": "高级数据库系统",
+            "description": "数据库内核原理、分布式数据库、NoSQL、大数据处理技术",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 19,
+            "total_size": 12582912,  # 约12MB
+            "files": {}
+        },
+        "kb_cs_networks": {
+            "id": "kb_cs_networks",
+            "name": "计算机网络协议栈",
+            "description": "TCP/IP协议族、网络编程、5G通信、软件定义网络等网络技术",
+            "category": "计算机科学",
+            "created_at": current_time,
+            "updated_at": current_time,
+            "file_count": 23,
+            "total_size": 16777216,  # 约16MB
+            "files": {}
+        }
+    }
 
 def save_knowledge_base_config():
     """保存知识库配置"""
@@ -389,26 +461,25 @@ def render_create_kb_modal():
     with st.expander("➕ 创建新知识库", expanded=True):
         st.markdown("### 创建新的知识库")
         
-        name = st.text_input("知识库名称*", placeholder="输入知识库名称...")
-        description = st.text_area("描述", placeholder="输入知识库描述...", height=100)
+        # 显示"敬请期待"提示
+        st.warning("⚠️ 该功能敬请期待")
+        st.info("创建新知识库功能正在开发中，敬请期待后续版本更新！")
+        
+        # 保留原有的UI界面但禁用功能
+        name = st.text_input("知识库名称*", placeholder="输入知识库名称...", disabled=True)
+        description = st.text_area("描述", placeholder="输入知识库描述...", height=100, disabled=True)
         
         categories = ["通用", "计算机科学", "数学", "物理", "化学", "生物", "其他"]
-        category = st.selectbox("分类", categories)
+        category = st.selectbox("分类", categories, disabled=True)
         
         if category == "其他":
-            category = st.text_input("自定义分类", placeholder="输入自定义分类...")
+            category = st.text_input("自定义分类", placeholder="输入自定义分类...", disabled=True)
         
         col1, col2 = st.columns(2)
         
         with col1:
-            if st.button("✅ 创建", key="create_kb", type="primary", disabled=not name):
-                if name:
-                    kb_id = create_knowledge_base(name, description, category)
-                    st.success(f"知识库 '{name}' 创建成功！")
-                    st.session_state.show_create_kb = False
-                    st.rerun()
-                else:
-                    st.error("请输入知识库名称！")
+            if st.button("✅ 创建", key="create_kb", type="primary", disabled=True):
+                pass  # 功能被禁用
         
         with col2:
             if st.button("❌ 取消", key="cancel_create_kb"):

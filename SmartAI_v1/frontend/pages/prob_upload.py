@@ -38,9 +38,9 @@ st.markdown("高效、智能、全面——您的自动化教学助理。")
 st.markdown("---")
 
 
-# --- 1. 作业上传核心功能区 ---
+# --- 作业上传核心功能区 ---
 st.markdown('<div class="card">', unsafe_allow_html=True)
-st.header("📂 第一步: 上传作业题目")
+st.header("📂 上传作业题目")
 st.caption("请将本次作业的题目文件上传。")
 
 uploaded_prob_file = st.file_uploader(
@@ -50,12 +50,13 @@ uploaded_prob_file = st.file_uploader(
 )
 if uploaded_prob_file is not None:
     st.success(f"文件 '{uploaded_prob_file.name}' 已选择。")
-st.markdown('</div>', unsafe_allow_html=True)
+    st.markdown('</div>', unsafe_allow_html=True)
 
+    st.markdown("---")
 
-# --- 2. 高级选项配置区 (使用 Expander) ---
-st.markdown('<div class="card">', unsafe_allow_html=True)
-with st.expander("⚙️ 第二步: 高级选项 (可选，展开以配置)"):
+# --- 高级选项配置区 (默认展开) ---
+    st.markdown('<div class="card">', unsafe_allow_html=True)
+    st.header("⚙️ 高级选项配置")
 
     # --- 新增：多模型协同批改设置 ---
     st.subheader("🤖 多模型协同批改")
@@ -77,7 +78,7 @@ with st.expander("⚙️ 第二步: 高级选项 (可选，展开以配置)"):
 
     # 仅当用户选择了模型后，才显示权重设置
     if selected_models:
-        st.markdown("##### 设定各模型初始权重")
+        st.markdown("##### 各模型权重配置")
         
         # 使用字典来存储权重，以便于后续处理
         current_weights = {}
@@ -88,22 +89,23 @@ with st.expander("⚙️ 第二步: 高级选项 (可选，展开以配置)"):
         
         for model in selected_models:
             with cols[col_idx]:
-                # .get(model, 50) 意味着如果模型是新选中的，默认权重为50
-                weight = st.slider(
+                # 固定权重为50，不可滑动
+                st.slider(
                     f"'{model}' 权重",
                     min_value=0,
                     max_value=100,
-                    value=st.session_state.ai_weights.get(model, 50),
-                    key=f"weight_{model}"
+                    value=50,
+                    key=f"weight_{model}",
+                    disabled=True  # 禁用滑块
                 )
-                current_weights[model] = weight
+                current_weights[model] = 50  # 固定设置为50
             # 切换到下一列
             col_idx = (col_idx + 1) % 2
         
         # 更新session_state中的权重记录
         st.session_state.ai_weights = current_weights
         
-        st.info("提示：此权重为初始参考值。最终评分时，系统会优先采用对题目置信度更高的专家意见。")
+        st.info("提示：所有模型权重已固定为50，系统将根据各模型对题目的置信度自动调整最终评分。")
     else:
         st.warning("请至少选择一个AI模型以进行批改。")
     
@@ -192,9 +194,9 @@ with st.expander("⚙️ 第二步: 高级选项 (可选，展开以配置)"):
 st.markdown('</div>', unsafe_allow_html=True)
 
 
-# --- 3. 确认与提交区 ---
+# --- 确认与提交区 ---
 st.markdown("---")
-st.header("✅ 第三步: 确认并开始识别题目")
+st.header("✅ 确认并开始识别题目")
 st.info("请检查以上信息。点击下方按钮后，系统将开始处理您的文件。")
 
 # 当用户上传了作业文件后，才激活确认按钮
