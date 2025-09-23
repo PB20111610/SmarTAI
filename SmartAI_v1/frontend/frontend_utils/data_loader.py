@@ -122,8 +122,11 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
         print(f"Result status: {result.get('status', 'no status')}")
         print(f"Full result: {result}")
         
+        # Check if the job is completed - this is the key fix
         if result.get("status") != "completed":
-            return {"error": "批改任务未完成"}
+            # Also check if the result contains data even if status is not explicitly "completed"
+            if "results" not in result and "corrections" not in result:
+                return {"error": "批改任务未完成"}
         
         # 映射题目类型：从内部类型到中文显示名称
         type_display_mapping = {

@@ -55,9 +55,9 @@ def get_cached_llm():
         # Import here to avoid circular imports
         from langchain_openai import ChatOpenAI
         import os
-        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "8dcdf3e9238f48f4ae329f638e66dfe2.HHIbfrj5M4GcjM8f")
+        OPENAI_API_KEY = os.getenv("OPENAI_API_KEY", "66ea05a8d4484dbd98063dbde387149d.pCG80vNPAyKrdmBq")
         OPENAI_API_BASE = os.getenv("OPENAI_API_BASE", "https://open.bigmodel.cn/api/paas/v4")
-        OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4")
+        OPENAI_MODEL = os.getenv("OPENAI_MODEL", "glm-4-plus")
         
         LLM_CLIENT_CACHE[thread_id] = ChatOpenAI(
             model=OPENAI_MODEL,

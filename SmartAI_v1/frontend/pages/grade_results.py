@@ -113,7 +113,10 @@ else:
             status = result.get("status", "未知")
             st.write(f"状态: {status}")
             
-            if status == "completed":
+            # Key fix: Check if we have data even if status is not explicitly "completed"
+            has_data = "results" in result or "corrections" in result
+            
+            if status == "completed" or has_data:
                 # 显示结果
                 if "results" in result:  # Batch grading results
                     all_results = result["results"]
@@ -195,6 +198,8 @@ else:
                     
                     # 显示总分
                     st.write(f"**总分: {total_score:.1f}/{total_max_score:.1f}**")
+                else:
+                    st.warning("批改结果中没有找到学生数据。")
             elif status == "error":
                 st.error(f"批改过程中出现错误: {result.get('message', '未知错误')}")
             elif status == "pending":

@@ -36,11 +36,6 @@ st.page_link("main.py", label="home", icon="🏠")
 st.title("⚙️ 正在提交作业...")
 # st.info("请稍候，AI后台正在进行批改分析...")
 
-# 1. 立即提交任务给后端
-# 您的后端API应该设计为：接收到请求后，立即启动后台任务并返回一个确认信息，而不是等任务完成后再返回。
-# result = requests.post("http://your-uvicorn-backend/start_grade_job", json=data)
-
-
 # 2. 【核心逻辑】检查是否存在从其他页面传来的“触发标志”
 if st.session_state.get('trigger_ai_grading'):
     
@@ -59,14 +54,17 @@ if st.session_state.get('trigger_ai_grading'):
                 timeout=600
             )
             result.raise_for_status()
-            job_id = result.json().get("job_id")
+            job_response = result.json()
+            job_id = job_response.get("job_id")
         
         if not job_id:
             st.error("后端未返回 job_id")
         else:
             # 2. 从 session_state 中获取任务名，如果不存在则提供一个默认名
             task_name = st.session_state.get("task_name", "未命名任务")
-            del st.session_state.task_name
+            # Only delete if it exists
+            if "task_name" in st.session_state:
+                del st.session_state.task_name
             
             # 3. 获取并格式化当前提交时间
             submission_time = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
