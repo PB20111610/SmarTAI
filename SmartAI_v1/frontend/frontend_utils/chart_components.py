@@ -63,6 +63,15 @@ class ChartComponents:
             annotation_text=f"平均分: {avg_score:.1f}%"
         )
         
+        # 添加中位数线
+        median_score = np.median(scores)
+        fig.add_vline(
+            x=median_score,
+            line_dash="dot",
+            line_color=self.colors['info'],
+            annotation_text=f"中位数: {median_score:.1f}%"
+        )
+        
         fig.update_layout(
             title="成绩分布直方图",
             xaxis_title="成绩百分比 (%)",
@@ -82,17 +91,23 @@ class ChartComponents:
         labels = list(grade_counts.keys())
         values = list(grade_counts.values())
         
+        # Define colors for each grade level
+        grade_colors = {
+            '优秀': self.colors['success'],    # Green for excellent
+            '良好': self.colors['info'],       # Blue for good
+            '中等': self.colors['teal'],       # Teal for average
+            '及格': self.colors['secondary'],  # Orange for passing
+            '不及格': self.colors['danger']    # Red for failing
+        }
+        
+        # Map colors to labels in the same order
+        colors = [grade_colors.get(label, self.colors['primary']) for label in labels]
+        
         fig = go.Figure(data=[go.Pie(
             labels=labels,
             values=values,
             hole=0.4,
-            marker_colors=[
-                self.colors['success'],    # 优秀
-                self.colors['info'],       # 良好
-                self.colors['warning'],    # 中等
-                self.colors['secondary'],  # 及格
-                self.colors['danger']      # 不及格
-            ][:len(labels)]
+            marker_colors=colors
         )])
         
         fig.update_layout(
@@ -379,6 +394,58 @@ class ChartComponents:
         )
         
         return fig
+    
+    def create_question_heatmap(self, question_analysis: List[QuestionAnalysis]) -> go.Figure:
+        """创建题目分析热力图"""
+        if not question_analysis:
+            # Create an empty figure if no data
+            fig = go.Figure()
+            fig.update_layout(
+                title="题目分析热力图",
+                xaxis_title="题目编号",
+                yaxis_title="分析维度",
+                **self.default_layout
+            )
+            return fig
+        
+        # Prepare data for heatmap
+        questions = [q.question_id for q in question_analysis]
+        metrics = ["难度系数", "正确率", "平均分"]
+        
+        # Create data matrix
+        z_data = []
+        for metric in metrics:
+            row = []
+            for q in question_analysis:
+                if metric == "难度系数":
+                    row.append(q.difficulty)
+                elif metric == "正确率":
+                    row.append(q.correct_rate)
+                elif metric == "平均分":
+                    row.append(q.avg_score / q.max_score if q.max_score > 0 else 0)
+            z_data.append(row)
+        
+        fig = go.Figure(data=go.Heatmap(
+            z=z_data,
+            x=questions,
+            y=metrics,
+            colorscale='RdYlGn',
+            reversescale=True,  # Reverse scale for better visualization
+            showscale=True,
+            colorbar=dict(title="数值"),
+            text=z_data,
+            texttemplate="%{text:.2f}",
+            textfont={"size": 10},
+        ))
+        
+        fig.update_layout(
+            title="题目分析热力图",
+            xaxis_title="题目编号",
+            yaxis_title="分析维度",
+            **self.default_layout
+        )
+        
+        return fig
 
 
 # 全局图表组件实例
@@ -416,3 +483,7 @@ def create_trend_chart(student_scores: List[StudentScore]) -> go.Figure:
 def create_difficulty_scatter_chart(question_analysis: List[QuestionAnalysis]) -> go.Figure:
     """创建难度散点图的便捷函数"""
     return chart_components.create_difficulty_vs_accuracy_scatter(question_analysis)
+
+def create_question_heatmap_chart(question_analysis: List[QuestionAnalysis]) -> go.Figure:
+    """创建题目热力图的便捷函数"""
+    return chart_components.create_question_heatmap(question_analysis)

@@ -2,6 +2,8 @@ import streamlit as st
 import requests
 import pandas as pd
 from utils import *
+import json
+import os
 
 # --- 页面基础设置 ---
 st.set_page_config(
@@ -32,9 +34,23 @@ if "jobs" not in st.session_state or not st.session_state.jobs:
         # Clean up the temporary job ID
         del st.session_state.current_job_id
     else:
+        # Don't load mock jobs from file to prevent continuous submission
+        # Use static mock data in history pages instead
         st.warning("当前没有批改任务记录。")
         st.page_link("pages/stu_preview.py", label="返回学生作业总览", icon="📖")
         st.stop()
+
+# Filter out mock jobs
+filtered_jobs = {}
+if "jobs" in st.session_state:
+    for job_id, job_info in st.session_state.jobs.items():
+        # Skip mock jobs
+        if not job_id.startswith("MOCK_JOB_") and not job_info.get("is_mock", False):
+            filtered_jobs[job_id] = job_info
+    st.session_state.jobs = filtered_jobs
+
+# Get job IDs after filtering
+job_ids = list(st.session_state.jobs.keys()) if "jobs" in st.session_state else []
 
 # --- 页面内容 ---
 st.title("📊 AI批改结果")
@@ -204,13 +220,127 @@ else:
                 st.error(f"批改过程中出现错误: {result.get('message', '未知错误')}")
             elif status == "pending":
                 st.info("批改任务正在进行中，请稍候...")
+                
+                # Show mock data while waiting
+                st.info("显示模拟数据以供预览")
+                try:
+                    from frontend_utils.data_loader import load_mock_data
+                    mock_data = load_mock_data()
+                    
+                    if "student_scores" in mock_data:
+                        st.subheader("模拟学生批改结果预览")
+                        for student in mock_data["student_scores"][:3]:  # Show first 3 students
+                            st.markdown(f"### 学生: {student.student_name} ({student.student_id})")
+                            
+                            # Prepare data for display
+                            data = []
+                            total_score = 0
+                            total_max_score = 0
+                            
+                            for question in student.questions:
+                                data.append({
+                                    "题目ID": question["question_id"],
+                                    "题目类型": question["question_type"],
+                                    "得分": f"{question['score']:.1f}",
+                                    "满分": f"{question['max_score']:.1f}",
+                                    "置信度": f"{question['confidence']:.2f}",
+                                    "评语": question["feedback"]
+                                })
+                                total_score += question["score"]
+                                total_max_score += question["max_score"]
+                            
+                            # Display the student's grading results table
+                            df = pd.DataFrame(data)
+                            st.dataframe(df, use_container_width=True)
+                            
+                            # Display total score
+                            st.write(f"**总分: {total_score:.1f}/{total_max_score:.1f}**")
+                            st.divider()
+                except Exception as e:
+                    st.warning(f"无法加载模拟数据: {e}")
             else:
                 st.warning(f"未知状态: {status}")
                 
         except requests.exceptions.RequestException as e:
             st.error(f"获取批改结果失败: {e}")
+            
+            # Show mock data when backend is not available
+            st.info("显示模拟数据")
+            try:
+                from frontend_utils.data_loader import load_mock_data
+                mock_data = load_mock_data()
+                
+                if "student_scores" in mock_data:
+                    st.subheader("模拟学生批改结果")
+                    for student in mock_data["student_scores"][:3]:  # Show first 3 students
+                        st.markdown(f"### 学生: {student.student_name} ({student.student_id})")
+                        
+                        # Prepare data for display
+                        data = []
+                        total_score = 0
+                        total_max_score = 0
+                        
+                        for question in student.questions:
+                            data.append({
+                                "题目ID": question["question_id"],
+                                "题目类型": question["question_type"],
+                                "得分": f"{question['score']:.1f}",
+                                "满分": f"{question['max_score']:.1f}",
+                                "置信度": f"{question['confidence']:.2f}",
+                                "评语": question["feedback"]
+                            })
+                            total_score += question["score"]
+                            total_max_score += question["max_score"]
+                        
+                        # Display the student's grading results table
+                        df = pd.DataFrame(data)
+                        st.dataframe(df, use_container_width=True)
+                        
+                        # Display total score
+                        st.write(f"**总分: {total_score:.1f}/{total_max_score:.1f}**")
+                        st.divider()
+            except Exception as e:
+                st.warning(f"无法加载模拟数据: {e}")
         except Exception as e:
             st.error(f"处理批改结果时出现错误: {e}")
+            
+            # Show mock data when there's an error
+            st.info("显示模拟数据")
+            try:
+                from frontend_utils.data_loader import load_mock_data
+                mock_data = load_mock_data()
+                
+                if "student_scores" in mock_data:
+                    st.subheader("模拟学生批改结果")
+                    for student in mock_data["student_scores"][:3]:  # Show first 3 students
+                        st.markdown(f"### 学生: {student.student_name} ({student.student_id})")
+                        
+                        # Prepare data for display
+                        data = []
+                        total_score = 0
+                        total_max_score = 0
+                        
+                        for question in student.questions:
+                            data.append({
+                                "题目ID": question["question_id"],
+                                "题目类型": question["question_type"],
+                                "得分": f"{question['score']:.1f}",
+                                "满分": f"{question['max_score']:.1f}",
+                                "置信度": f"{question['confidence']:.2f}",
+                                "评语": question["feedback"]
+                            })
+                            total_score += question["score"]
+                            total_max_score += question["max_score"]
+                        
+                        # Display the student's grading results table
+                        df = pd.DataFrame(data)
+                        st.dataframe(df, use_container_width=True)
+                        
+                        # Display total score
+                        st.write(f"**总分: {total_score:.1f}/{total_max_score:.1f}**")
+                        st.divider()
+            except Exception as e:
+                st.warning(f"无法加载模拟数据: {e}")
 
 inject_pollers_for_active_jobs()
 

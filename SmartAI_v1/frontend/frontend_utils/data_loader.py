@@ -11,6 +11,8 @@ import pandas as pd
 import numpy as np
 import requests
 import streamlit as st
+import json
+import os
 
 @dataclass
 class StudentScore:
@@ -101,6 +103,53 @@ def check_all_jobs() -> Dict[str, Any]:
     except Exception as e:
         return {"error": f"Failed to check jobs: {str(e)}"}
 
+def load_mock_data() -> Dict[str, Any]:
+    """
+    Load mock data for testing when real data is not available
+    """
+    try:
+        # Try to load from root directory first (where the file actually is)
+        mock_data_path = os.path.join(os.path.dirname(__file__), "..", "..", "mock_data.json")
+        if not os.path.exists(mock_data_path):
+            # Fallback to frontend directory
+            mock_data_path = os.path.join(os.path.dirname(__file__), "..", "mock_data.json")
+        
+        with open(mock_data_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        # Convert string dates back to datetime objects
+        for student in data["student_scores"]:
+            if isinstance(student["submit_time"], str):
+                student["submit_time"] = datetime.fromisoformat(student["submit_time"])
+        
+        if isinstance(data["assignment_stats"]["create_time"], str):
+            data["assignment_stats"]["create_time"] = datetime.fromisoformat(data["assignment_stats"]["create_time"])
+        
+        # Convert to proper dataclass objects
+        student_scores = []
+        for student_data in data["student_scores"]:
+            student_scores.append(StudentScore(**student_data))
+        
+        question_analysis = []
+        for question_data in data["question_analysis"]:
+            question_analysis.append(QuestionAnalysis(**question_data))
+        
+        assignment_stats = AssignmentStats(**data["assignment_stats"])
+        
+        return {
+            "student_scores": student_scores,
+            "question_analysis": question_analysis,
+            "assignment_stats": assignment_stats
+        }
+    except Exception as e:
+        st.error(f"Failed to load mock data: {str(e)}")
+        # Return empty data structure instead of error
+        return {
+            "student_scores": [],
+            "question_analysis": [],
+            "assignment_stats": None
+        }
+
 def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
     """
     从AI批改系统加载实际数据
@@ -126,7 +175,9 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
         if result.get("status") != "completed":
             # Also check if the result contains data even if status is not explicitly "completed"
             if "results" not in result and "corrections" not in result:
-                return {"error": "批改任务未完成"}
+                # If we can't get real data, return mock data
+                st.warning("无法获取实时数据，显示模拟数据")
+                return load_mock_data()
         
         # 映射题目类型：从内部类型到中文显示名称
         type_display_mapping = {
@@ -376,7 +427,11 @@ def load_ai_grading_data(job_id: str) -> Dict[str, Any]:
                 "assignment_stats": assignment_stats
             }
         
-        return {"error": "无效的批改结果格式"}
+        # If we can't get real data, return mock data
+        st.warning("无法获取实时数据，显示模拟数据")
+        return load_mock_data()
         
     except Exception as e:
-        return {"error": f"加载AI批改数据失败: {str(e)}"}
+        # If there's an error, return mock data
+        st.warning(f"加载AI批改数据失败: {str(e)}，显示模拟数据")
+        return load_mock_data()

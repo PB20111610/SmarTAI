@@ -7,6 +7,7 @@ SmarTAI项目 - 主应用入口文件
 import streamlit as st
 import sys
 import os
+import json
 from datetime import datetime
 from typing import Dict, Any
 
@@ -27,6 +28,46 @@ st.set_page_config(
     initial_sidebar_state="collapsed"
 )
 
+def load_mock_data():
+    """Load mock data for testing when real data is not available"""
+    try:
+        # Try to load from root directory first (where the file actually is)
+        mock_data_path = os.path.join(os.path.dirname(__file__), "..", "mock_data.json")
+        if not os.path.exists(mock_data_path):
+            # Fallback to frontend directory
+            mock_data_path = os.path.join(os.path.dirname(__file__), "mock_data.json")
+        
+        with open(mock_data_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        
+        # Convert string dates back to datetime objects
+        for student in data["student_scores"]:
+            if isinstance(student["submit_time"], str):
+                student["submit_time"] = datetime.fromisoformat(student["submit_time"])
+        
+        if isinstance(data["assignment_stats"]["create_time"], str):
+            data["assignment_stats"]["create_time"] = datetime.fromisoformat(data["assignment_stats"]["create_time"])
+        
+        # Convert to proper dataclass objects
+        student_scores = []
+        for student_data in data["student_scores"]:
+            student_scores.append(StudentScore(**student_data))
+        
+        question_analysis = []
+        for question_data in data["question_analysis"]:
+            question_analysis.append(QuestionAnalysis(**question_data))
+        
+        assignment_stats = AssignmentStats(**data["assignment_stats"])
+        
+        return {
+            "student_scores": student_scores,
+            "question_analysis": question_analysis,
+            "assignment_stats": assignment_stats
+        }
+    except Exception as e:
+        st.error(f"Failed to load mock data: {str(e)}")
+        return create_default_data()
+
 def init_session_state():
     """初始化会话状态"""
     # Initialize session state from utils.py
@@ -44,11 +85,14 @@ def init_session_state():
                 if "error" not in ai_data:
                     st.session_state.sample_data = ai_data
                 else:
-                    # Fallback to default data if AI data loading fails
-                    st.session_state.sample_data = create_default_data()
+                    # Load mock data if AI data loading fails
+                    st.session_state.sample_data = load_mock_data()
             else:
-                # Use default data when no job is selected
-                st.session_state.sample_data = create_default_data()
+                # Load mock data when no job is selected (before any grading)
+                st.session_state.sample_data = load_mock_data()
+    
+    # Don't load mock jobs from file, use static mock data in history pages instead
+    # This prevents the continuous submission of mock grading tasks
     
     if 'user_info' not in st.session_state:
         st.session_state.user_info = {
@@ -56,82 +100,6 @@ def init_session_state():
             'role': '任课教师',
             'department': '计算机科学与技术学院'
         }
-
-def create_default_data():
-    """创建默认数据用于演示"""
-    # Create default student scores
-    students = [
-        StudentScore(
-            student_id="S001",
-            student_name="张三",
-            total_score=85,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=False,
-            confidence_score=0.92
-        ),
-        StudentScore(
-            student_id="S002",
-            student_name="李四",
-            total_score=72,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=True,
-            confidence_score=0.78
-        ),
-        StudentScore(
-            student_id="S003",
-            student_name="王五",
-            total_score=93,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=False,
-            confidence_score=0.95
-        )
-    ]
-    
-    # Create default question analysis
-    questions = [
-        QuestionAnalysis(
-            question_id="Q1",
-            question_type="concept",
-            topic="数据结构基础",
-            difficulty=0.3,
-            correct_rate=0.85,
-            avg_score=8.5,
-            max_score=10
-        ),
-        QuestionAnalysis(
-            question_id="Q2",
-            question_type="calculation",
-            topic="算法复杂度",
-            difficulty=0.7,
-            correct_rate=0.65,
-            avg_score=6.5,
-            max_score=10
-        )
-    ]
-    
-    # Create default assignment stats
-    assignment_stats = AssignmentStats(
-        assignment_id="DEFAULT",
-        assignment_name="示例作业",
-        total_students=3,
-        submitted_count=3,
-        avg_score=83.3,
-        max_score=93,
-        min_score=72,
-        std_score=10.5,
-        pass_rate=100,
-        question_count=2,
-        create_time=datetime.now()
-    )
-    
-    return {
-        "student_scores": students,
-        "question_analysis": questions,
-        "assignment_stats": assignment_stats
-    }
 
 def render_hero_section():
     """渲染主题部分"""
@@ -174,9 +142,9 @@ def render_user_welcome():
                 if "error" not in ai_data:
                     st.session_state.sample_data = ai_data
                 else:
-                    st.error(f"刷新数据失败: {ai_data['error']}")
+                    st.session_state.sample_data = load_mock_data()
             else:
-                st.session_state.sample_data = create_default_data()
+                st.session_state.sample_data = load_mock_data()
             st.success("数据已刷新！")
             st.rerun()
     
@@ -316,7 +284,7 @@ def render_feature_cards():
         """, unsafe_allow_html=True)
         
         if st.button("📚 查看历史记录", use_container_width=True, type="primary", key="history_button_3"):
-            st.switch_page("pages/history_enhanced.py")
+            st.switch_page("pages/history.py")
 
         st.markdown("""
             </div>

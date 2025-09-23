@@ -83,7 +83,7 @@ def update_ans():
 
 def get_master_poller_html(jobs_json: str, backend_url: str) -> str:
     """
-    生成一个“主”轮询脚本。
+    生成一个"主"轮询脚本。
     这个脚本接收一个包含所有任务详细信息的 JSON 对象，
     并在内部为每个 job_id 启动轮询。
     """
@@ -156,16 +156,29 @@ def inject_pollers_for_active_jobs():
     """
     【核心函数优化版】将所有活动任务的ID打包，一次性注入一个主轮询器。
     """
+    # Only poll for real jobs, not mock jobs
     if "jobs" not in st.session_state:
         st.session_state.jobs = {}
     if "backend" not in st.session_state:
         st.session_state.backend = "http://localhost:8000"
 
-    if not st.session_state.jobs:
+    # Filter out mock jobs - only poll for real jobs
+    real_jobs = {}
+    if st.session_state.jobs:
+        for job_id, job_info in st.session_state.jobs.items():
+            # Skip mock jobs entirely
+            if job_id.startswith("MOCK_JOB_"):
+                continue
+            # Skip mock jobs with is_mock flag
+            is_mock = job_info.get("is_mock", False)
+            if not is_mock:
+                real_jobs[job_id] = job_info
+
+    if not real_jobs:
         return
 
     # 将 Python 的 job_id 列表转换为 JSON 格式的字符串
-    jobs_json_string = json.dumps(st.session_state.jobs)
+    jobs_json_string = json.dumps(real_jobs)
 
     # 获取包含所有轮询逻辑的单个主脚本
     master_js_code = get_master_poller_html(jobs_json_string, st.session_state.backend)

@@ -17,7 +17,7 @@ import sys
 import os
 sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from frontend_utils.data_loader import StudentScore, load_ai_grading_data
+from frontend_utils.data_loader import StudentScore, load_ai_grading_data, load_mock_data
 from frontend_utils.chart_components import create_student_radar_chart
 
 # 页面配置
@@ -39,49 +39,12 @@ def init_session_state():
                 st.session_state.ai_grading_data = ai_data
             else:
                 st.error(f"加载AI批改数据失败: {ai_data['error']}")
-                # Fallback to default data
-                st.session_state.sample_data = create_default_data()
+                # Fallback to mock data
+                st.session_state.sample_data = load_mock_data()
     else:
-        # Create default data if no job is selected
+        # Load mock data if no job is selected
         if 'sample_data' not in st.session_state:
-            st.session_state.sample_data = create_default_data()
-
-def create_default_data():
-    """创建默认数据用于演示"""
-    # Create default student scores
-    students = [
-        StudentScore(
-            student_id="S001",
-            student_name="张三",
-            total_score=85,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=False,
-            confidence_score=0.92
-        ),
-        StudentScore(
-            student_id="S002",
-            student_name="李四",
-            total_score=72,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=True,
-            confidence_score=0.78
-        ),
-        StudentScore(
-            student_id="S003",
-            student_name="王五",
-            total_score=93,
-            max_score=100,
-            submit_time=datetime.now(),
-            need_review=False,
-            confidence_score=0.95
-        )
-    ]
-    
-    return {
-        "student_scores": students
-    }
+            st.session_state.sample_data = load_mock_data()
 
 def render_header():
     """渲染页面头部"""
@@ -100,7 +63,7 @@ def render_header():
                    unsafe_allow_html=True)
     
     with col4:
-        if st.button("📈 成绩展示", type="primary"):
+        if st.button("📈 可视化分析", type="primary"):
             st.switch_page("pages/visualization.py")
 
 def render_student_selection(students: List[StudentScore]):
@@ -133,6 +96,29 @@ def render_student_report(student: StudentScore):
     st.markdown(f"# 📄 {student.student_name} 的作业报告")
     st.markdown(f"**学号:** {student.student_id} | **提交时间:** {student.submit_time.strftime('%Y-%m-%d %H:%M')}")
     
+    # Add PDF export button
+    if st.button("📄 导出为PDF"):
+        try:
+            # Import PDF generator
+            from frontend_utils.pdf_generator import generate_student_report
+            
+            with st.spinner("正在生成PDF报告..."):
+                # Generate PDF report
+                pdf_path = generate_student_report(student)
+                
+                # Provide download link
+                with open(pdf_path, "rb") as file:
+                    st.download_button(
+                        label="📥 下载PDF报告",
+                        data=file,
+                        file_name=f"{student.student_name}_作业报告.pdf",
+                        mime="application/pdf",
+                        key="download_pdf_student"
+                    )
+                st.success("PDF报告已生成！点击上方按钮下载。")
+        except Exception as e:
+            st.error(f"生成PDF报告时出错: {str(e)}")
+    
     # 主要得分指标
     col1, col2, col3, col4 = st.columns(4)
     
@@ -155,7 +141,18 @@ def render_student_report(student: StudentScore):
         """, unsafe_allow_html=True)
     
     with col3:
-        grade_color = "#10B981" if student.grade_level in ["优秀", "良好"] else "#F59E0B" if student.grade_level == "中等" else "#EF4444"
+        # Use consistent color coding for grade levels
+        if student.grade_level == "优秀":
+            grade_color = "#10B981"  # green
+        elif student.grade_level == "良好":
+            grade_color = "#3B82F6"  # blue
+        elif student.grade_level == "中等":
+            grade_color = "#2E8B57"  # teal
+        elif student.grade_level == "及格":
+            grade_color = "#F59E0B"  # orange
+        else:  # 不及格
+            grade_color = "#EF4444"  # red
+            
         st.markdown(f"""
         <div style="text-align: center; padding: 1.5rem; background: white; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
             <h1 style="color: {grade_color}; margin: 0; font-size: 2rem;">{student.grade_level}</h1>
@@ -226,8 +223,12 @@ def main():
     # 获取数据 - 优先使用AI批改数据，如果没有则使用示例数据
     if 'ai_grading_data' in st.session_state and st.session_state.ai_grading_data:
         students = st.session_state.ai_grading_data.get('student_scores', [])
-    else:
+    elif 'sample_data' in st.session_state and st.session_state.sample_data:
         students = st.session_state.sample_data.get('student_scores', [])
+    else:
+        # Load mock data as fallback
+        mock_data = load_mock_data()
+        students = mock_data.get('student_scores', [])
     
     # 渲染学生选择
     selected_student = render_student_selection(students)

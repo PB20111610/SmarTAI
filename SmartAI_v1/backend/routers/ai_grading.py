@@ -338,7 +338,6 @@ def get_grading_result(job_id: str):
     """
     Get the grading result for a job.
     """
-    logger.info(f"Checking result for job_id: {job_id}")
     result = GRADING_RESULTS.get(job_id, {"status": "not_found", "message": "Job ID not found in results."})
     return result
 

@@ -76,6 +76,16 @@ if st.session_state.get('trigger_ai_grading'):
             }
 
             # 5. 将这个任务的详细信息存入全局的任务字典中，以 job_id 作为唯一的键
+            # Filter out any existing mock jobs before adding new ones
+            if "jobs" in st.session_state:
+                filtered_jobs = {}
+                for job_id, job_info in st.session_state.jobs.items():
+                    # Skip mock jobs
+                    if not job_id.startswith("MOCK_JOB_") and not job_info.get("is_mock", False):
+                        filtered_jobs[job_id] = job_info
+                st.session_state.jobs = filtered_jobs
+            
+            # Add the new job
             st.session_state.jobs[job_id] = task_details
             # Also store the job_id for immediate access
             st.session_state.current_job_id = job_id
