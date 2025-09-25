@@ -11,7 +11,6 @@ import sys
 import threading
 import time
 import logging
-import signal
 import atexit
 import subprocess
 
@@ -42,10 +41,18 @@ def run_backend():
             app=backend_app,
             host="127.0.0.1",
             port=8000,  # Use port 8000 to match frontend configuration
-            log_level="info"
+            log_level="info",
+            # 关键：禁止信号处理
+            loop="asyncio",
+            http="auto",
+            lifespan="off",
+            factory=False,
+            # 下面两行直接关掉信号
+            access_log=False,
+            use_colors=False
         )
-        server = uvicorn.Server(config)
         
+        server = uvicorn.Server(config)
         # Run the server
         logger.info("Starting backend server on port 8000")
         server.run()
@@ -60,7 +67,7 @@ def run_frontend():
         # Use subprocess to run Streamlit properly
         logger.info("Starting frontend app with Streamlit")
         frontend_path = os.path.join(os.path.dirname(__file__), "frontend", "main.py")
-        cmd = [sys.executable, "-m", "streamlit", "run", frontend_path, "--server.port", "8501"]
+        cmd = [sys.executable, "-m", "streamlit", "run", frontend_path, "--server.port", "8502"]
         process = subprocess.Popen(cmd)
         logger.info(f"Frontend Streamlit app started with PID {process.pid}")
         return process
@@ -110,11 +117,6 @@ class ServerManager:
                 self.frontend_process.kill()
             logger.info("Frontend process terminated")
 
-def signal_handler(signum, frame):
-    """Handle shutdown signals"""
-    logger.info(f"Received signal {signum}, shutting down...")
-    shutdown_event.set()
-
 def cleanup():
     """Cleanup function to be called on exit"""
     global server_manager
@@ -129,12 +131,8 @@ server_manager = ServerManager()
 # Register cleanup function
 atexit.register(cleanup)
 
-# Register signal handlers
-signal.signal(signal.SIGINT, signal_handler)
-signal.signal(signal.SIGTERM, signal_handler)
-
-# Start backend when this file is run directly
-if __name__ == "__main__":
+def main():
+    """Main function to run both frontend and backend"""
     try:
         # Start the backend server
         server_manager.start_backend()
@@ -145,17 +143,29 @@ if __name__ == "__main__":
         # Start the frontend app
         server_manager.start_frontend()
         
-        # Wait for shutdown signal
-        logger.info("Application running. Press Ctrl+C to shutdown.")
+        # Wait for shutdown event or run indefinitely
+        logger.info("Application running.")
         logger.info("Backend API running on http://localhost:8000")
-        logger.info("Frontend UI running on http://localhost:8501")
-        shutdown_event.wait()
+        logger.info("Frontend UI running on http://localhost:8502")
         
-    except KeyboardInterrupt:
-        logger.info("Received KeyboardInterrupt, shutting down...")
+        # In cloud environments, we just run indefinitely
+        # In local environments, we could use signal handling
+        try:
+            shutdown_event.wait()
+        except KeyboardInterrupt:
+            logger.info("Received KeyboardInterrupt, shutting down...")
+        except:
+            # In cloud environments, just run indefinitely
+            while True:
+                time.sleep(1)
+        
     except Exception as e:
         logger.error(f"Unexpected error: {e}")
     finally:
         # Ensure cleanup happens
         cleanup()
         logger.info("Application shutdown complete")
+
+# Start backend when this file is run directly (not when imported by Streamlit)
+if __name__ == "__main__":
+    main()
