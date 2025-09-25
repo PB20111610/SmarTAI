@@ -366,8 +366,8 @@ def main():
 
 def render_home_page():
     """渲染主页面"""
-    st.markdown('<div class="title" data-text="SmarTAI作业平台">SmarTAI作业平台</div>', unsafe_allow_html=True)
-    st.markdown('<div class="subtitle">智能化作业批改系统</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title" data-text="SmarTAI">SmarTAI</div>', unsafe_allow_html=True)
+    st.markdown('<div class="subtitle">智能作业评估平台</div>', unsafe_allow_html=True)
 
     # 主界面内容
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -399,7 +399,7 @@ def render_home_page():
 
 def render_welcome_page():
     """渲染欢迎页面（登录后）"""
-    st.markdown('<div class="title">🎉 欢迎使用 SmarTAI作业平台</div>', unsafe_allow_html=True)
+    st.markdown('<div class="title">🎉 欢迎使用 SmarTAI 智能作业评估平台</div>', unsafe_allow_html=True)
     st.markdown('<div class="subtitle">登录成功！</div>', unsafe_allow_html=True)
     
     col1, col2, col3 = st.columns([1, 2, 1])
@@ -499,7 +499,7 @@ def render_login_page():
         # 演示账户信息
         st.markdown("""
         <div style="background: #F0F7FF; border: 1px solid #1E3A8A; border-radius: 8px; padding: 1rem; margin: 1rem 0; color: #1E3A8A; font-weight: 600;">
-            💡 <strong>演示账户</strong>: admin / 123456 或使用任意非空用户名密码
+            💡 <strong>演示账户</strong>: admin / 123456
         </div>
         """, unsafe_allow_html=True)
 

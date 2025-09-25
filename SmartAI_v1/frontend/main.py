@@ -66,7 +66,7 @@ def load_mock_data():
         }
     except Exception as e:
         st.error(f"Failed to load mock data: {str(e)}")
-        return create_default_data()
+        # return create_default_data()
 
 def init_session_state():
     """初始化会话状态"""
@@ -105,18 +105,21 @@ def render_hero_section():
     """渲染主题部分"""
     st.markdown("""
     <div class="hero-section">
-        <h1 style="font-size: 3rem; margin-bottom: 1rem; font-weight: 700;">🎓 SmarTAI</h1>
-        <h2 style="font-size: 1.5rem; margin-bottom: 0.5rem; opacity: 0.9;">智能评估平台</h2>
+        <h1 style="text-align: center; color: #000000; margin-bottom: 1rem; font-weight: 700;">🎓 SmarTAI</h1>
+        <h2 style="text-align: center; color: #000000; margin-bottom: 0.5rem; opacity: 0.9;">智能作业评估平台</h2>
+        <h4 style='text-align: center; color: #000000;'>高效、智能、全面——您的自动化教学助理。</h4>
         <p style="font-size: 1.125rem; opacity: 0.8; max-width: 600px; margin: 0 auto;">
             基于人工智能的理工科教育评估系统提供智能评分、深度分析和可视化报告
         </p>
     </div>
     """, unsafe_allow_html=True)
+    st.markdown("---")
+
 
 def render_user_welcome():
     """渲染用户欢迎信息"""
     user_info = st.session_state.user_info
-    col1, col2, col3, col4 = st.columns([2, 2, 1, 1])
+    col1, col2,col3 = st.columns([35,35,15])
     
     with col1:
         # 显示登录用户信息
@@ -130,12 +133,12 @@ def render_user_welcome():
         current_time = datetime.now()
         st.markdown(f"""
         ### 📅 今日信息
-        **日期:** {current_time.strftime('%Y年%m月%d日')}<br>
+        **日期:** {current_time.strftime('%Y年%m月%d日 ')}
         **时间:** {current_time.strftime('%H:%M')}
         """, unsafe_allow_html=True)
     
     with col3:
-        if st.button("🔄 刷新数据", use_container_width=True):
+        if st.button("🔄 刷新数据", use_container_width=False):
             # Refresh data based on selected job or default data
             if 'selected_job_id' in st.session_state:
                 ai_data = load_ai_grading_data(st.session_state.selected_job_id)
@@ -147,9 +150,8 @@ def render_user_welcome():
                 st.session_state.sample_data = load_mock_data()
             st.success("数据已刷新！")
             st.rerun()
-    
-    with col4:
-        if st.button("🚪 退出登录", use_container_width=True, type="secondary"):
+        
+        if st.button("🚪 退出登录", use_container_width=False, type="secondary"):
             # 清除登录状态
             st.session_state.logged_in = False
             st.session_state.username = ""
@@ -223,13 +225,14 @@ def render_feature_cards():
     """渲染功能特性卡片"""
     st.markdown("## 🚀 核心功能")
     
-    col1, col2, col3 = st.columns(3)
+    col1, col2 = st.columns(2)
+    col3, col4 = st.columns(2)
     
     with col1:
         st.markdown("""
         <div class="feature-card">
             <div class="feature-icon">📊</div>
-            <div class="feature-title">评分报告</div>
+            <div class="feature-title">作业评分报告</div>
             <div class="feature-description">
                 查看学生作业详细评分结果，支持人工修改和批量操作。
                 提供置信度分析和复核建议。
@@ -252,9 +255,9 @@ def render_feature_cards():
         st.markdown("""
         <div class="feature-card">
             <div class="feature-icon">📈</div>
-            <div class="feature-title">可视化分析</div>
+            <div class="feature-title">成绩可视化分析</div>
             <div class="feature-description">
-                深度分析学生表现和题目质量，生成交互式图表和统计报告。
+                深度分析学生成绩表现和题目质量，生成交互式图表和统计报告。
                 支持多维度数据分析。
             </div>
             <div class="feature-card-buttons">
@@ -274,8 +277,8 @@ def render_feature_cards():
     with col3:
         st.markdown("""
         <div class="feature-card">
-            <div class="feature-icon">📚</div>
-            <div class="feature-title">历史记录</div>
+            <div class="feature-icon">🕒</div>
+            <div class="feature-title">历史批改记录</div>
             <div class="feature-description">
                 查看历史批改记录，支持暂存功能。可以预览、编辑暂存记录，
                 查看已完成批改的作业详情。
@@ -283,8 +286,28 @@ def render_feature_cards():
             <div class="feature-card-buttons">
         """, unsafe_allow_html=True)
         
-        if st.button("📚 查看历史记录", use_container_width=True, type="primary", key="history_button_3"):
+        if st.button("🕒 查看历史记录", use_container_width=True, type="primary", key="history_button_3"):
             st.switch_page("pages/history.py")
+
+        st.markdown("""
+            </div>
+        </div>
+        """, unsafe_allow_html=True)
+
+    with col4:
+        st.markdown("""
+        <div class="feature-card">
+            <div class="feature-icon">📚</div>
+            <div class="feature-title">知识数据库管理</div>
+            <div class="feature-description">
+                知识库管理，支持查看、新建、修改、删除知识库及其中文件，
+                查看已存在的知识库详情。
+            </div>
+            <div class="feature-card-buttons">
+        """, unsafe_allow_html=True)
+        
+        if st.button("📚 查看历史记录", use_container_width=True, type="primary", key="history_button_4"):
+            st.switch_page("pages/knowledge_base.py")
 
         st.markdown("""
             </div>
@@ -342,43 +365,43 @@ def render_quick_preview():
         except Exception as e:
             st.error(f"生成图表时出错: {str(e)}")
 
-def render_quick_actions():
-    """渲染快速操作"""
-    st.markdown("""
-    <div class="quick-access">
-        <h3 style="color: #1E3A8A; margin-bottom: 1.5rem;">⚡ 快速操作</h3>
-    """, unsafe_allow_html=True)
+# def render_quick_actions():
+#     """渲染快速操作"""
+#     st.markdown("""
+#     <div class="quick-access">
+#         <h3 style="color: #1E3A8A; margin-bottom: 1.5rem;">⚡ 快速操作</h3>
+#     """, unsafe_allow_html=True)
     
-    col1, col2, col3, col4, col5, col6 = st.columns(6)
+#     col1, col2, col3, col4, col5, col6 = st.columns(6)
     
-    with col1:
-        if st.button("📋 最新作业", use_container_width=True):
-            st.info("🔄 跳转到最新作业评分...")
+#     with col1:
+#         if st.button("📋 最新作业", use_container_width=True):
+#             st.info("🔄 跳转到最新作业评分...")
     
-    with col2:
-        if st.button("⚠️ 待复核列表", use_container_width=True):
-            st.info("📝 显示需要复核的作业...")
+#     with col2:
+#         if st.button("⚠️ 待复核列表", use_container_width=True):
+#             st.info("📝 显示需要复核的作业...")
     
-    with col3:
-        if st.button("📈 生成报告", use_container_width=True):
-            with st.spinner("生成综合分析报告中..."):
-                import time
-                time.sleep(2)
-            st.success("✅ 综合分析报告已生成！")
+#     with col3:
+#         if st.button("📈 生成报告", use_container_width=True):
+#             with st.spinner("生成综合分析报告中..."):
+#                 import time
+#                 time.sleep(2)
+#             st.success("✅ 综合分析报告已生成！")
     
-    with col4:
-        if st.button("📚 知识库管理", use_container_width=True):
-            st.switch_page("pages/knowledge_base.py")
+#     with col4:
+#         if st.button("📚 知识库管理", use_container_width=True):
+#             st.switch_page("pages/knowledge_base.py")
     
-    with col5:
-        if st.button("📊 批改结果", use_container_width=True):
-            st.switch_page("pages/grade_results.py")
+#     with col5:
+#         if st.button("📊 批改结果", use_container_width=True):
+#             st.switch_page("pages/grade_results.py")
     
-    with col6:
-        if st.button("⚙️ 系统设置", use_container_width=True):
-            st.info("🔧 打开系统设置界面...")
+#     with col6:
+#         if st.button("⚙️ 系统设置", use_container_width=True):
+#             st.info("🔧 打开系统设置界面...")
     
-    st.markdown("</div>", unsafe_allow_html=True)
+#     st.markdown("</div>", unsafe_allow_html=True)
 
 def render_recent_activities():
     """渲染最近活动"""
@@ -436,22 +459,21 @@ def render_footer():
     with col1:
         st.markdown("""
         ### 📞 技术支持
-        **邮箱:** support@smartai.edu
+        **邮箱:** smartai2025@126.com
         """)
     
     with col2: #TODO: 添加帮助链接
         st.markdown("""
         ### 📚 使用帮助
-        - [用户手册](https://docs.smartai.edu)
-        - [常见问题](https://faq.smartai.edu)
-        - [更新日志](https://changelog.smartai.edu)
+        - 用户手册 (敬请期待)
+        - 常见问题 (敬请期待)
         """)
     
     with col3:
         st.markdown("""
         ### ℹ️ 系统信息
         **版本:** v1.0.0
-        **最后更新:** 2024-09-30
+        **最后更新:** 2025-09-30
         """)
 
 def render_dashboard():
@@ -460,8 +482,8 @@ def render_dashboard():
     load_custom_css()
     init_session_state()
     
-    # Inject pollers for active jobs
-    inject_pollers_for_active_jobs()
+    # # Inject pollers for active jobs
+    # inject_pollers_for_active_jobs()
     
     # 渲染页面各个部分
     render_hero_section()
@@ -471,21 +493,23 @@ def render_dashboard():
     render_statistics_overview()
     
     st.markdown("---")
-    render_feature_cards()
+    render_upload_section()
     
     st.markdown("---")
-    render_upload_section()
+    render_feature_cards()
     
     st.markdown("---")
     render_quick_preview()
     
-    st.markdown("---")
-    render_quick_actions()
+    # st.markdown("---")
+    # render_quick_actions()
     
     st.markdown("---")
     render_recent_activities()
     
     render_footer()
+
+    inject_pollers_for_active_jobs()
 
 def main():
     """主函数 - 应用入口点"""

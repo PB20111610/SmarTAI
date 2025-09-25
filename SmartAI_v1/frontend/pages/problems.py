@@ -14,21 +14,37 @@ initialize_session_state()
 # 在每个页面的顶部调用这个函数
 load_custom_css()
 
-# --- 新增：左上角返回主页链接 ---
-# 这个链接会固定显示在主内容区域的顶部
-st.page_link("main.py", label="home", icon="🏠")
+def render_header():
+    """渲染页面头部"""
+    col1, col2, _, col3 = st.columns([8,12,30,8])
+    col = st.columns(1)[0]
 
+    with col1:
+        st.page_link("main.py", label="返回首页", icon="🏠")
+
+    with col2:
+        st.page_link("pages/prob_upload.py", label="重新上传作业题目", icon="📤")
+    
+    with col3:
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+    
+    with col:
+        st.markdown("<h1 style='text-align: center; color: #000000;'>📖 题目识别概览</h1>", 
+                   unsafe_allow_html=True)
+        st.markdown("---")
+        
+render_header()
 # --- 安全检查 ---
 # 检查必要的数据是否已加载st.session_state.prob_data
 if 'prob_data' not in st.session_state or not st.session_state.get('prob_data'):
     st.warning("请先在“作业题目上传”页面上传并作业题目文件。")
-    st.page_link("pages/prob_upload.py", label="返回上传页面", icon="📤")
+    # st.page_link("pages/prob_upload.py", label="返回上传页面", icon="📤")
     st.stop()
 
 
 # --- 渲染函数 (从原代码复制过来，无需修改) ---
 def render_question_overview():
-    st.header("📝 题目识别概览")
+    # st.header("📝 题目识别概览")
     st.caption("您可以直接在左侧下拉框中修改题目类型，或点击编辑按钮修改题干与评分标准。")
     # problems = st.session_state.prob_data.get('problems', [])
     problems = st.session_state.prob_data
@@ -89,7 +105,7 @@ def render_question_overview():
             else:
                 col1, col2, col3 = st.columns([0.2, 0.65, 0.15])
                 with col1:
-                    q_types = ["概念题", "计算题", "证明题", "编程题", "简答题", "其他"]
+                    q_types = ["概念题", "计算题", "证明题", "推理题", "编程题", "其他"]
                     current_type = q.get('type')
                     try:
                         current_type_index = q_types.index(current_type) if current_type in q_types else 0
@@ -142,9 +158,9 @@ col_spacer, col_button = st.columns([4, 1])
 with col_button:
     # 2. 创建一个按钮，并告诉它在被点击时调用上面的函数
     if st.button(
-        "✅ 确认题目分类与评分细则。下一步：上传学生作业", 
+        "✅ 确认题目", 
         on_click=start_ai_grading_and_navigate, 
-        use_container_width=True # 让按钮填满列宽，视觉效果更好
+        use_container_width=False # 让按钮填满列宽，视觉效果更好
     ):
         update_prob()
         update_ans()

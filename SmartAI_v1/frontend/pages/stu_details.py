@@ -17,32 +17,55 @@ initialize_session_state()
 # 在每个页面的顶部调用这个函数
 load_custom_css()
 
-st.page_link("main.py", label="home", icon="🏠")
+def render_header():
+    """渲染页面头部"""
+    col1, col2, col3, col4, _, col5 = st.columns([8,13,13,13,15,8])
+    col = st.columns(1)[0]
 
-st.page_link("pages/problems.py", label="返回题目识别概览", icon="📝")
+    with col1:
+        st.page_link("main.py", label="返回首页", icon="🏠")
+
+    with col2:
+        st.page_link("pages/prob_upload.py", label="重新上传作业题目", icon="📤")
+
+    with col3:
+        st.page_link("pages/problems.py", label="返回题目识别概览", icon="📖")
+
+    with col4:
+        st.page_link("pages/hw_upload.py", label="重新上传学生作答", icon="📤")
+
+    with col5:
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+    
+    with col:
+        st.markdown("<h1 style='text-align: center; color: #000000;'>📝 学生作业作答详情</h1>", 
+                   unsafe_allow_html=True)
+        st.markdown("---")
+        
+render_header()
 
 # --- 安全检查 ---
 # 检查必要的数据是否已加载
 if 'prob_data' not in st.session_state or not st.session_state.get('prob_data'):
-    st.warning("请先在“作业题目上传”页面上传并作业题目文件。")
-    st.page_link("pages/prob_upload.py", label="返回上传页面", icon="📤")
+    st.warning("请先在“作业题目上传”页面上传并处理作业题目文件。")
+    # st.page_link("pages/prob_upload.py", label="返回题目上传页面", icon="📤")
     st.stop()
 if 'processed_data' not in st.session_state or not st.session_state.get('processed_data'):
-    st.warning("请先在“作业上传”页面上传并处理文件。")
-    st.page_link("pages/hw_upload.py", label="返回上传页面", icon="📤")
+    st.warning("请先在“学生作业上传”页面上传并处理学生作答文件。")
+    # st.page_link("pages/hw_upload.py", label="返回作答上传页面", icon="📤")
     st.stop()
 
 # 检查是否有学生被选中，防止用户直接访问此页面
 if 'selected_student_id' not in st.session_state or not st.session_state.get('selected_student_id'):
     st.warning("请先从“学生作业总览”页面选择一个学生。")
-    st.page_link("pages/stu_preview.py", label="返回总览页面", icon="📖")
+    # st.page_link("pages/stu_preview.py", label="返回总览页面", icon="📖")
     st.stop()
 
 
-# --- 滚动逻辑 ---
-# 每次进入详情页时，自动滚动到顶部
-scroll_to_here(50, key='top')
-scroll_to_here(0, key='top_fix')
+# # --- 滚动逻辑 ---
+# # 每次进入详情页时，自动滚动到顶部
+# scroll_to_here(50, key='top')
+# scroll_to_here(0, key='top_fix')
 
 
 # --- 侧边栏导航 (与总览页保持一致) ---
@@ -50,7 +73,7 @@ with st.sidebar:
     st.header("导航")
     
     # st.page_link("pages/problems.py", label="题目识别概览", icon="📝")
-    st.page_link("pages/stu_preview.py", label="学生作业总览", icon="📖")
+    st.page_link("pages/stu_preview.py", label="学生作答总览", icon="📝")
 
     with st.expander("按学生查看", expanded=True):
         student_list = sorted(list(st.session_state.processed_data.keys()))
@@ -66,6 +89,8 @@ with st.sidebar:
                 st.session_state['selected_student_id'] = sid
                 # 由于已经在详情页，切换学生只需 rerun 即可，无需切换页面
                 # st.rerun()
+                scroll_to_here(50, key='top')
+                scroll_to_here(0, key='top_fix')
 
             for sid in student_list:
                 # 判断当前按钮是否为正在查看的学生
@@ -92,7 +117,7 @@ def render_student_view(student_id):
     stu_data = st.session_state.processed_data.get(student_id, {})
 
     stu_name = stu_data.get("stu_name", "未知姓名")
-    st.header(f"🧑‍🎓 学生作业详情: {student_id} - {stu_name}")
+    st.header(f"🎓 学生: {student_id} - {stu_name}")
 
     answers = stu_data.get('stu_ans', [])
 
@@ -228,15 +253,25 @@ def start_ai_grading_and_navigate():
 # 添加一个分隔符，使其与主内容分开
 st.divider()
 
+def return_top():
+    scroll_to_here(50, key='top')
+    scroll_to_here(0, key='top_fix')
 # 使用列布局将按钮推到右侧 (这部分和你的代码一样)
-col_spacer, col_button = st.columns([4, 1])
+col1, _, col2 = st.columns([8, 40, 8])
 
-with col_button:
+with col1:
+    st.button(
+        "返回顶部", 
+        on_click=return_top,
+        use_container_width=False
+    )
+
+with col2:
     # 2. 创建一个按钮，并告诉它在被点击时调用上面的函数
     if st.button(
-        "开启AI批改", 
+        "🚀 开启AI批改", 
         on_click=start_ai_grading_and_navigate, 
-        use_container_width=True # 让按钮填满列宽，视觉效果更好
+        use_container_width=False
     ):
         update_prob()
         update_ans()

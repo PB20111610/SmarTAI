@@ -102,6 +102,8 @@ def process_student_answer(answer: Dict[str, Any], problem_store: Dict[str, Any]
     # Map Chinese question types to internal English types for processing
     type_mapping = {
         "概念题": "concept",
+        "其他": "concept",
+        "其它": "concept",
         "计算题": "calculation", 
         "证明题": "proof",
         "推理题": "proof", # 推理题和证明题可以使用相同的处理节点

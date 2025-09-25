@@ -22,7 +22,7 @@ from frontend_utils.data_loader import load_ai_grading_data
 # 页面配置
 st.set_page_config(
     page_title="SmarTAI - 历史批改记录",
-    page_icon="📚",
+    page_icon="🕒",
     layout="wide",
     initial_sidebar_state="collapsed"
 )
@@ -44,22 +44,24 @@ def init_storage_state():
 
 def render_header():
     """渲染页面头部"""
-    col1, col2, col3 = st.columns([2, 3, 2])
-    
+    col1, col3, col2 = st.columns([2, 16, 2])
+
+    # col3 = st.columns(1)[0]
+
     with col1:
         if st.button("🏠 返回首页", type="secondary"):
             st.switch_page("main.py")
     
     with col2:
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>📚 历史批改记录</h1>", 
-                   unsafe_allow_html=True)
-    
-    with col3:
-        if st.button("🔄 刷新记录", type="primary"):
+        if st.button("🔄 刷新界面", type="secondary"):
             sync_completed_records()
             st.success("记录已刷新！")
             st.rerun()
 
+    with col3:
+        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>🕒 历史批改记录</h1>", 
+                   unsafe_allow_html=True)
+        
 def sync_completed_records():
     """同步已完成的批改记录"""
     if "jobs" in st.session_state and st.session_state.jobs:
@@ -269,7 +271,7 @@ def render_completed_records():
             col1, col2, col3, col4 = st.columns(4)
             
             with col1:
-                if st.button("📊 查看结果", key=f"view_{job_id}", use_container_width=True, type="primary"):
+                if st.button("💯 评分报告", key=f"view_{job_id}", use_container_width=True, type="secondary"):
                     # For mock jobs, directly load the mock data into session state
                     if job_id.startswith("MOCK_JOB"):
                         # Load mock data directly into ai_grading_data so score_report.py can use it
@@ -280,7 +282,7 @@ def render_completed_records():
                     st.switch_page("pages/score_report.py")
             
             with col2:
-                if st.button("📈 可视化分析", key=f"viz_{job_id}", use_container_width=True):
+                if st.button("📈 成绩分析", key=f"viz_{job_id}", use_container_width=True):
                     # For mock jobs, directly load the mock data into session state
                     if job_id.startswith("MOCK_JOB"):
                         # Load mock data directly into ai_grading_data so visualization.py can use it
@@ -291,7 +293,7 @@ def render_completed_records():
                     st.switch_page("pages/visualization.py")
             
             with col3:
-                if st.button("📄 生成报告", key=f"report_{job_id}", use_container_width=True):
+                if st.button("📄 导出PDF报告", key=f"report_{job_id}", use_container_width=True):
                     try:
                         # Import PDF generator
                         from frontend_utils.pdf_generator import generate_assignment_report
@@ -380,7 +382,7 @@ def render_completed_records():
                 is_mock = task_info.get("is_mock", False) or job_id.startswith("MOCK_JOB")
                 
                 # Don't allow removal of mock jobs
-                if not is_mock and st.button("🗑️ 移除", key=f"remove_{job_id}", use_container_width=True, type="secondary"):
+                if not is_mock and st.button("🗑️ 删除记录", key=f"remove_{job_id}", use_container_width=True, type="secondary"):
                     # 从jobs中移除
                     if "jobs" in st.session_state and job_id in st.session_state.jobs:
                         del st.session_state.jobs[job_id]
@@ -391,7 +393,7 @@ def render_completed_records():
                     st.rerun()
                 elif is_mock:
                     # For mock jobs, just show a disabled button or informative text
-                    st.button(" Mock任务", key=f"remove_{job_id}", use_container_width=True, type="secondary", disabled=True)
+                    st.button("【这是示例模拟任务】", key=f"remove_{job_id}", use_container_width=True, type="secondary")
 
 def render_statistics_overview():
     """渲染统计概览"""

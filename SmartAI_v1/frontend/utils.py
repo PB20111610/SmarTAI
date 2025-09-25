@@ -3,6 +3,16 @@ import streamlit as st
 import streamlit.components.v1 as components
 import json # 引入 json 库用于将 Python 列表转换为 JS 数组
 import requests
+import os
+KNOWLEDGE_BASE_DIR = "knowledge_bases"
+KNOWLEDGE_BASE_CONFIG = "knowledge_base_config.json"
+
+def load_knowledge_base_config():
+    """从 JSON 文件加载知识库配置到 session_state"""
+    if os.path.exists(KNOWLEDGE_BASE_CONFIG):
+        with open(KNOWLEDGE_BASE_CONFIG, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    return {}
 
 def load_custom_css(file_path=None):
     """
@@ -44,6 +54,9 @@ def initialize_session_state():
 
     if 'ans_changed' not in st.session_state:
         st.session_state.ans_changed = False
+
+    if 'knowledge_bases' not in st.session_state:
+        st.session_state.knowledge_bases = load_knowledge_base_config()
         
 def update_prob():
     if st.session_state.get('prob_changed', False):
@@ -132,9 +145,12 @@ def get_master_poller_html(jobs_json: str, backend_url: str) -> str:
                             // --- 核心修改：生成用户友好的弹窗消息 ---
                             const taskName = taskDetails.name || "未命名任务";
                             const submittedAt = taskDetails.submitted_at || "未知时间";
-                            alert(`您于 [${{submittedAt}}] 提交的任务\\n"${{taskName}}"\\n已成功完成！`);
-                            // ------------------------------------
+                            alert(`您于 [${{submittedAt}}] 提交的任务\\n"${{taskName}}"\\n已成功完成！\\n如果当前在AI批改结果总览窗口，请手动点击右上角“刷新数据”按钮以查看详细数据！`);
+                            // 标记为完成，防止重复弹窗
                             sessionStorage.setItem(completedKey, 'true');
+                            // --- 新增功能：刷新当前页面 ---
+                            //window.parent.location.reload();
+                            // -----------------------------
                         }}
                     }}
                 }} catch (err) {{
@@ -185,3 +201,109 @@ def inject_pollers_for_active_jobs():
 
     # 全局只调用这一次 components.html！
     components.html(master_js_code, height=0)
+
+# import sys
+# # --- START: 动态路径修改 ---
+# # 这段代码会确保无论你从哪里运行脚本，都能正确找到 frontent 模块
+
+# # 1. 获取当前文件 (utils.py) 所在的目录 (frontent/)
+# current_dir = os.path.dirname(os.path.abspath(__file__))
+
+# # 2. 获取 'frontent/' 的父目录 (也就是 'project/')
+# project_root = os.path.dirname(current_dir)
+
+# # 3. 如果 'project/' 目录不在Python的搜索路径中，就把它加进去
+# if project_root not in sys.path:
+#     sys.path.insert(0, project_root)
+
+# # --- END: 动态路径修改 ---
+
+
+# # 现在，因为 'project/' 目录已经在搜索路径里了，
+# # 下面这个绝对导入就一定能成功
+# from frontend.poller_component import poll_and_rerun
+
+# def inject_pollers_for_active_jobs():
+#     """
+#     【最终版】使用自定义组件注入轮询器，并在完成后触发 st.rerun()。
+#     此函数现在是对 poll_and_rerun 组件的一个封装。
+#     """
+#     if "jobs" not in st.session_state:
+#         st.session_state.jobs = {}
+#     if "backend" not in st.session_state:
+#         # 确保有一个默认的后端URL
+#         st.session_state.backend = "http://localhost:8000"
+
+#     # 筛选出需要轮询的真实任务
+#     real_jobs = {
+#         job_id: job_info
+#         for job_id, job_info in st.session_state.jobs.items()
+#         if not job_id.startswith("MOCK_JOB_") and not job_info.get("is_mock", False)
+#     }
+
+#     if not real_jobs:
+#         return
+
+#     # 将任务字典转换为 JSON 字符串
+#     jobs_json_string = json.dumps(real_jobs)
+
+#     # 调用组件函数，它会处理所有前端逻辑和 rerun 触发
+#     # 我们为 key 提供一个固定的字符串，以确保组件在不同页面间保持一致性
+#     poll_and_rerun(jobs_json_string, st.session_state.backend, key="global_job_poller")
+
+
+def get_all_jobs_for_selection():
+    """
+    获取所有可供选择的批改任务，包括已完成、处理中和模拟任务。
+    返回一个字典 {job_id: {"task_name": "...", "status": "..."}}
+    """
+    all_jobs = {}
+
+    # 1. 添加模拟批改任务作为基础选项
+    if 'sample_data' not in st.session_state:
+        from frontend_utils.data_loader import load_mock_data
+        st.session_state.sample_data = load_mock_data()
+    
+    if 'sample_data' in st.session_state and st.session_state.sample_data:
+        assignment_stats = st.session_state.sample_data.get('assignment_stats')
+        if assignment_stats:
+            mock_job_id = "MOCK_JOB_001"
+            all_jobs[mock_job_id] = {
+                "task_name": f"【模拟数据】{assignment_stats.assignment_name}",
+                "status": "completed"
+            }
+
+    # 2. 遍历 session_state 中所有真实的任务
+    if "jobs" in st.session_state and st.session_state.jobs:
+        job_ids = list(st.session_state.jobs.keys())
+        for job_id in job_ids:
+            if job_id.startswith("MOCK_JOB_"):
+                continue
+            
+            task_info = st.session_state.jobs[job_id]
+            if task_info.get("is_mock", False):
+                continue
+            
+            try:
+                # 通过API检查任务状态
+                response = requests.get(f"{st.session_state.backend}/ai_grading/grade_result/{job_id}", timeout=3)
+                response.raise_for_status()
+                status = response.json().get("status", "pending")
+                
+                job_name = task_info.get("name", f"任务-{job_id[:8]}")
+                # 为处理中的任务添加特殊标记
+                if status == "pending":
+                    job_name += " (处理中...)"
+
+                all_jobs[job_id] = {
+                    "task_name": job_name,
+                    "status": status
+                }
+            except requests.exceptions.RequestException:
+                # 如果请求失败，也将其视为处理中
+                all_jobs[job_id] = {
+                    "task_name": f"{task_info.get('name', f'任务-{job_id[:8]}')} (状态未知)",
+                    "status": "pending" 
+                }
+            
+    return all_jobs

@@ -12,6 +12,7 @@ import streamlit as st
 import os
 import json
 import shutil
+import time
 from datetime import datetime
 from typing import Dict, List, Any, Optional
 import pandas as pd
@@ -167,7 +168,10 @@ def delete_knowledge_base(kb_id: str):
         # 删除文件夹
         kb_path = os.path.join(KNOWLEDGE_BASE_DIR, kb_id)
         if os.path.exists(kb_path):
-            shutil.rmtree(kb_path)
+            try:
+                shutil.rmtree(kb_path)
+            except:
+                print("删除路径失败！")
         
         # 从配置中删除
         del st.session_state.knowledge_bases[kb_id]
@@ -314,12 +318,72 @@ def render_knowledge_base_overview():
 def render_knowledge_base_list():
     """渲染知识库列表"""
     st.markdown("## 📖 知识库列表")
-    
-    # 创建新知识库按钮
-    if st.button("➕ 创建新知识库", type="primary"):
-        st.session_state.show_create_kb = True
-        st.rerun()
-    
+
+    # 使用 st.expander 来包裹创建表单，代码更简洁
+    with st.expander("➕ 点击此处创建新知识库"):
+        st.markdown("##### 1. 选择分类")
+        categories = ["通用", "计算机科学", "数学", "物理", "化学", "生物", "其他"]
+        # 使用 session_state 来保存用户的选择，以便在页面刷新后保留
+        if 'category_selection' not in st.session_state:
+            st.session_state.category_selection = "通用"
+        
+        st.selectbox(
+            "分类", 
+            categories, 
+            key="category_selection" # 绑定到 session_state
+        )
+
+        with st.form("new_kb_form", clear_on_submit=True):
+            st.markdown("#### 2. 填写详细信息")
+            new_kb_name = st.text_input("新知识库名称*", placeholder="例如：高等数学-第五章-知识点")
+            new_kb_desc = st.text_area("知识库描述 (可选)", placeholder="简要描述知识库包含的内容、课程、章节等。")
+            
+            # 使用 selectbox 提供更好的分类选择
+            # categories = ["通用", "计算机科学", "数学", "物理", "化学", "生物", "其他"]
+            # category_selection = st.selectbox("分类", categories)
+            if st.session_state.category_selection == "其他":
+                new_kb_category = st.text_input("自定义分类", placeholder="输入自定义分类...")
+            else:
+                new_kb_category = st.session_state.category_selection
+
+            knowledge_files = st.file_uploader(
+                "上传知识库文件 (可多选)",
+                accept_multiple_files=True,
+                type=['pdf', 'docx', 'txt', 'md']
+            )
+            
+            submitted = st.form_submit_button("✅ 确认创建知识库", type="primary", use_container_width=True)
+
+            if submitted:
+                if not new_kb_name:
+                    st.error("知识库名称不能为空。")
+                elif not knowledge_files:
+                    st.error("请至少上传一个知识库文件。")
+                else:
+                    final_category = new_kb_category or "通用"
+                    with st.spinner(f"正在创建知识库 '{new_kb_name}'..."):
+                        # 调用您已有的函数来创建知识库
+                        kb_id = create_knowledge_base(new_kb_name, new_kb_desc, final_category)
+                        
+                        # 如果有上传文件，则添加到知识库中
+                        if knowledge_files:
+                            success_count = 0
+                            for uploaded_file in knowledge_files:
+                                file_content = uploaded_file.read()
+                                file_type = uploaded_file.type or "unknown"
+                                if add_file_to_kb(kb_id, uploaded_file.name, file_content, file_type):
+                                    success_count += 1
+                            st.success(f"✅ 知识库 '{new_kb_name}' 创建成功，并已上传 {success_count} 个文件！")
+                            time.sleep(1)
+                        else:
+                            st.success(f"知识库 '{new_kb_name}' 创建成功！")
+                            time.sleep(1)
+                    
+                    # 成功后刷新页面，expander 会自动折叠，列表会更新
+                    st.rerun()
+
+    st.markdown("---") # 添加一条分割线，让界面更清晰
+
     # 搜索和筛选
     col1, col2 = st.columns(2)
     with col1:
@@ -437,8 +501,8 @@ def render_knowledge_base_list():
 def handle_modals():
     """处理各种模态框"""
     # 创建知识库模态框
-    if st.session_state.get('show_create_kb', False):
-        render_create_kb_modal()
+    # if st.session_state.get('show_create_kb', False):
+    #     render_create_kb_modal()
     
     # 编辑知识库模态框
     if st.session_state.get('show_edit_kb', False):
@@ -457,34 +521,63 @@ def handle_modals():
         render_kb_stats_modal()
 
 def render_create_kb_modal():
-    """渲染创建知识库模态框"""
+    """渲染创建知识库模态框（完整功能版）"""
     with st.expander("➕ 创建新知识库", expanded=True):
-        st.markdown("### 创建新的知识库")
+        st.markdown("### 创建一个新的知识库")
         
-        # 显示"敬请期待"提示
-        st.warning("⚠️ 该功能敬请期待")
-        st.info("创建新知识库功能正在开发中，敬请期待后续版本更新！")
-        
-        # 保留原有的UI界面但禁用功能
-        name = st.text_input("知识库名称*", placeholder="输入知识库名称...", disabled=True)
-        description = st.text_area("描述", placeholder="输入知识库描述...", height=100, disabled=True)
-        
-        categories = ["通用", "计算机科学", "数学", "物理", "化学", "生物", "其他"]
-        category = st.selectbox("分类", categories, disabled=True)
-        
-        if category == "其他":
-            category = st.text_input("自定义分类", placeholder="输入自定义分类...", disabled=True)
-        
-        col1, col2 = st.columns(2)
-        
-        with col1:
-            if st.button("✅ 创建", key="create_kb", type="primary", disabled=True):
-                pass  # 功能被禁用
-        
-        with col2:
-            if st.button("❌ 取消", key="cancel_create_kb"):
-                st.session_state.show_create_kb = False
-                st.rerun()
+        with st.form("create_kb_form", clear_on_submit=True):
+            name = st.text_input("知识库名称*", placeholder="输入知识库名称...")
+            description = st.text_area("描述", placeholder="输入知识库描述...", height=100)
+            
+            # 预设分类 + 其他选项
+            categories = ["通用", "计算机科学", "数学", "物理", "化学", "生物", "其他"]
+            category_selection = st.selectbox("分类", categories)
+            
+            # 如果选择"其他"，则显示自定义输入框
+            if category_selection == "其他":
+                category = st.text_input("自定义分类", placeholder="输入自定义分类...")
+            else:
+                category = category_selection
+
+            # 文件上传
+            uploaded_files = st.file_uploader(
+                "上传初始文件 (可选)",
+                accept_multiple_files=True,
+                type=['txt', 'pdf', 'doc', 'docx', 'json', 'csv', 'xlsx']
+            )
+
+            # 提交按钮
+            submitted = st.form_submit_button("✅ 创建知识库", type="primary")
+
+            if submitted:
+                if not name:
+                    st.error("知识库名称不能为空！")
+                else:
+                    final_category = category if category else "通用"
+                    with st.spinner(f"正在创建知识库 '{name}'..."):
+                        # 1. 创建知识库基础信息
+                        kb_id = create_knowledge_base(name, description, final_category)
+                        
+                        # 2. 如果有上传文件，则添加到知识库中
+                        if uploaded_files:
+                            success_count = 0
+                            for uploaded_file in uploaded_files:
+                                file_content = uploaded_file.read()
+                                file_type = uploaded_file.type or "unknown"
+                                if add_file_to_kb(kb_id, uploaded_file.name, file_content, file_type):
+                                    success_count += 1
+                            st.success(f"知识库 '{name}' 创建成功，并成功上传 {success_count} 个文件！")
+                        else:
+                            st.success(f"知识库 '{name}' 创建成功！")
+                    
+                    # 3. 关闭模态框并刷新
+                    st.session_state.show_create_kb = False
+                    st.rerun()
+
+        # 在表单外部添加取消按钮
+        if st.button("❌ 取消", key="cancel_create_kb"):
+            st.session_state.show_create_kb = False
+            st.rerun()
 
 def render_edit_kb_modal():
     """渲染编辑知识库模态框"""
@@ -754,6 +847,8 @@ def main():
     st.markdown("---")
     
     render_knowledge_base_list()
+
+    inject_pollers_for_active_jobs()
 
 if __name__ == "__main__":
     main()

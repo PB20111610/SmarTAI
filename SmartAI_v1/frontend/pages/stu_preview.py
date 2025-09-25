@@ -3,6 +3,7 @@
 import streamlit as st
 import pandas as pd
 from utils import *
+import re
 
 # --- 页面基础设置 (建议添加) ---
 st.set_page_config(
@@ -17,16 +18,46 @@ initialize_session_state()
 # 在每个页面的顶部调用这个函数
 load_custom_css()
 
-st.page_link("main.py", label="home", icon="🏠")
+def render_header():
+    """渲染页面头部"""
+    col1, col2, col3, col4, _, col5 = st.columns([8,13,13,13,15,8])
+    col = st.columns(1)[0]
 
-st.page_link("pages/problems.py", label="返回题目识别概览", icon="📝")
+    with col1:
+        st.page_link("main.py", label="返回首页", icon="🏠")
+
+    with col2:
+        st.page_link("pages/prob_upload.py", label="重新上传作业题目", icon="📤")
+
+    with col3:
+        st.page_link("pages/problems.py", label="返回题目识别概览", icon="📖")
+
+    with col4:
+        st.page_link("pages/hw_upload.py", label="重新上传学生作答", icon="📤")
+
+    with col5:
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+    
+    with col:
+        st.markdown("""
+    <div class="hero-section">
+        <h1 style="text-align: center; color: #000000; margin-bottom: 1rem; font-weight: 700;">📝 学生作业作答总览</h1>
+        <p style='text-align: center; color: #000000;'>您可以拖拽表格右下角以调整表格大小</p>
+    </div>
+    """, unsafe_allow_html=True)
+        st.markdown("---")
+        
+render_header()
 
 # --- 安全检查 ---
 # 检查必要的数据是否已加载
+if 'prob_data' not in st.session_state or not st.session_state.get('prob_data'):
+    st.warning("请先在“作业题目上传”页面上传并处理作业题目文件。")
+    # st.page_link("pages/prob_upload.py", label="返回题目上传页面", icon="📤")
+    st.stop()
 if 'processed_data' not in st.session_state or not st.session_state.get('processed_data'):
-    st.warning("请先在“作业上传”页面上传并处理文件。")
-    # 提供返回上传页面的链接
-    st.page_link("pages/hw_upload.py", label="返回上传页面", icon="📤")
+    st.warning("请先在“学生作业上传”页面上传并处理学生作答文件。")
+    # st.page_link("pages/hw_upload.py", label="返回作答上传页面", icon="📤")
     st.stop()
 
 
@@ -38,7 +69,7 @@ with st.sidebar:
     # st.page_link("pages/problems.py", label="题目识别概览", icon="📝") # 假设题目识别页面文件名
     
     # 当前页面的链接，点击它相当于刷新到总览状态
-    st.page_link("pages/stu_preview.py", label="学生作业总览", icon="📖")
+    st.page_link("pages/stu_preview.py", label="学生作答总览", icon="📝")
 
     # --- 学生列表导航 ---
     # 点击每个学生的名字，会通过 session_state 传递ID并切换到详情页面
@@ -74,7 +105,7 @@ def render_students_dashboard():
     """
     显示一个包含所有学生作业状态的总览表
     """
-    st.header("📖 学生作业总览")
+    # st.header("📖 学生作业总览")
     
     students_data = st.session_state.processed_data
     problems_data = st.session_state.prob_data
@@ -86,32 +117,25 @@ def render_students_dashboard():
     # 准备用于DataFrame的数据
     dashboard_data = []
     
-    for stu_id, students_data in students_data.items():
-        name = students_data.get("stu_name", "未知姓名")
+    # --- 修改1：按学号递增排序 ---
+    # 在循环前，先获取排序后的学号列表
+    sorted_stu_ids = sorted(students_data.keys())
+
+    for stu_id in sorted_stu_ids:
+        student_data = students_data[stu_id]
+        name = student_data.get("stu_name", "未知姓名")
         row = {
             '学号': stu_id,
             '姓名': name,
             }
-        # answers_map = {ans.get('q_id'): ans for ans in student.get('stu_ans', [])}
-        
-        # for q in problems_data:
-        #     q_id = q.get('q_id')
-        #     q_num = q.get('number', '未知题号')
-            
-        #     if q_id in answers_map:
-        #         if answers_map[q_id].get('flag'):
-        #             row[q_num] = "🚩 需人工处理"
-        #         else:
-        #             row[q_num] = "✅ 已提交并识别成功"
-        #     else:
-        #         row[q_num] = "❌ 未提交"
 
-        answers = students_data.get('stu_ans', [])
+        answers = student_data.get('stu_ans', [])
         ans_qid_list = []
         for ans in answers:
             q_id = ans.get('q_id')
             ans_qid_list.append(q_id)
-            q_num = ans.get('number', '未知题号')
+            num = ans.get('number', '未知题号')
+            q_num = "题目 "+str(num)
             
             if ans.get('flag'):
                 row[q_num] = "🚩 需人工处理"
@@ -128,7 +152,26 @@ def render_students_dashboard():
         dashboard_data.append(row)
         
     if dashboard_data:
-        df = pd.DataFrame(dashboard_data).set_index('学号')
+        df = pd.DataFrame(dashboard_data)
+
+        # --- 修改2：按题号递增排序 ---
+        # 定义一个函数来实现“自然排序”，确保“题2”在“题10”之前
+        def natural_sort_key(s):
+            return [int(text) if text.isdigit() else text.lower() for text in re.split('([0-9]+)', str(s))]
+
+        # 获取所有题目列并进行自然排序
+        problem_columns = [col for col in df.columns if col not in ['学号', '姓名']]
+        sorted_problem_columns = sorted(problem_columns, key=natural_sort_key)
+        
+        # 定义最终的列顺序
+        final_column_order = ['学号', '姓名'] + sorted_problem_columns
+        
+        # 应用列顺序
+        df = df[final_column_order]
+
+        # --- 修改3：同时固定学号和姓名列 ---
+        df = df.set_index(['学号', '姓名'])
+        
         st.dataframe(df, use_container_width=True)
     else:
         st.info("无法生成学生作业总览。")
@@ -151,14 +194,14 @@ def start_ai_grading_and_navigate():
 st.divider()
 
 # 使用列布局将按钮推到右侧 (这部分和你的代码一样)
-col_spacer, col_button = st.columns([4, 1])
+col_spacer, col_button = st.columns([48, 8])
 
 with col_button:
     # 2. 创建一个按钮，并告诉它在被点击时调用上面的函数
     if st.button(
-        "开启AI批改", 
+        "🚀 开启AI批改", 
         on_click=start_ai_grading_and_navigate, 
-        use_container_width=True # 让按钮填满列宽，视觉效果更好
+        use_container_width=False
     ):
         update_prob()
         update_ans()

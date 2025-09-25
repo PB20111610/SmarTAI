@@ -29,7 +29,17 @@ st.markdown("""
     </style>
     """, unsafe_allow_html=True)
 
-st.page_link("main.py", label="home", icon="🏠")
+def render_header():
+    """渲染页面头部"""
+    col1, _, col2 = st.columns([8,50,8])
+
+    with col1:
+        st.page_link("main.py", label="返回首页", icon="🏠")
+    
+    with col2:
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+        
+render_header()
 
 # --- 模拟后端提交和页面跳转 ---
 

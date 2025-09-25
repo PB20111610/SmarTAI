@@ -18,9 +18,37 @@ initialize_session_state()
 # 在每个页面的顶部调用这个函数
 load_custom_css()
 
-st.page_link("main.py", label="home", icon="🏠")
+def render_header():
+    """渲染页面头部"""
+    col1, col2, col3, _, col4 = st.columns([8,12,18,30,8])
+    col = st.columns(1)[0]
 
-st.page_link("pages/problems.py", label="返回题目识别概览", icon="📝")
+    with col1:
+        st.page_link("main.py", label="返回首页", icon="🏠")
+
+    with col2:
+        st.page_link("pages/prob_upload.py", label="重新上传作业题目", icon="📤")
+
+    with col3:
+        st.page_link("pages/problems.py", label="返回题目识别概览", icon="📖")
+
+    with col4:
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+    
+    with col:
+        st.markdown("""
+    <div class="hero-section">
+        <h1 style="text-align: center; color: #000000; margin-bottom: 1rem; font-weight: 700;">🎓 SmarTAI 智能作业评估平台</h1>
+        <h4 style='text-align: center; color: #000000;'>高效、智能、全面——您的自动化教学助理。</h4>
+    </div>
+    """, unsafe_allow_html=True)
+        st.markdown("---")
+        
+render_header()
+
+if 'prob_data' not in st.session_state or not st.session_state.get('prob_data'):
+    st.warning("请先在“作业题目上传”页面上传并作业题目文件。")
+    st.stop()
 
 # --- 后端服务地址 ---
 # BACKEND_URL = os.getenv("BACKEND_URL", "http://127.0.0.1:8000/hw_upload")
@@ -34,10 +62,10 @@ st.session_state.processed_data = None
 # if st.session_state.processed_data:
 #     st.switch_page("pages/problems.py")
 
-# --- 页面标题和简介 ---
-st.title("🚀 智能作业核查系统")
-st.markdown("高效、智能、全面——您的自动化教学助理。")
-st.markdown("---")
+# # --- 页面标题和简介 ---
+# st.title("🚀 智能作业核查系统")
+# st.markdown("高效、智能、全面——您的自动化教学助理。")
+# st.markdown("---")
 
 
 # --- 1. 作业上传核心功能区 ---
@@ -62,7 +90,7 @@ st.info("请检查以上信息。点击下方按钮后，系统将开始处理�
 # 当用户上传了作业文件后，才激活确认按钮
 if uploaded_hw_file is not None:
     if st.button("确认信息，开始智能核查", type="primary", use_container_width=True):
-        with st.spinner("正在上传并请求AI分析，请耐心等待..."):
+        with st.spinner("正在上传并请求AI分析，请耐心几分钟..."):
             # 准备要发送的文件
             files_to_send = {
                 "file": (uploaded_hw_file.name, uploaded_hw_file.getvalue(), uploaded_hw_file.type)

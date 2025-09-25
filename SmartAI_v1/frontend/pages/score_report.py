@@ -11,6 +11,7 @@ from datetime import datetime, timedelta
 from typing import List, Dict, Any, Optional
 import plotly.express as px
 import plotly.graph_objects as go
+from utils import *
 
 # 导入自定义模块
 import sys
@@ -45,26 +46,40 @@ def init_session_state():
         # Load mock data if no job is selected
         if 'sample_data' not in st.session_state:
             st.session_state.sample_data = load_mock_data()
-
 def render_header():
     """渲染页面头部"""
-    col1, col2, col3, col4 = st.columns([2, 2, 2, 2])
-    
+    col1, col2, col3, col4, col5, col6, col7 = st.columns(7)
+    col = st.columns(1)[0]
+
     with col1:
-        if st.button("🏠 返回首页", type="secondary"):
-            st.switch_page("main.py")
+        st.page_link("main.py", label="返回首页", icon="🏠")
     
     with col2:
-        if st.button("📊 批改结果", type="secondary"):
-            st.switch_page("pages/grade_results.py")
-    
+        st.page_link("pages/history.py", label="历史记录", icon="🕒")
+
     with col3:
-        st.markdown("<h1 style='text-align: center; color: #1E3A8A;'>📊 评分报告</h1>", 
-                   unsafe_allow_html=True)
-    
+        st.page_link("pages/problems.py", label="作业题目", icon="📖")
+
     with col4:
-        if st.button("📈 可视化分析", type="primary"):
-            st.switch_page("pages/visualization.py")
+        st.page_link("pages/stu_preview.py", label="学生作业", icon="📝")
+    
+    with col5:
+        st.page_link("pages/grade_results.py", label="批改结果", icon="📊")
+
+    with col6:
+        st.page_link("pages/score_report.py", label="评分报告", icon="💯")
+
+    with col7:
+        st.page_link("pages/visualization.py", label="成绩分析", icon="📈")
+    
+    with col:
+        st.markdown("<h1 style='text-align: center; color: #000000;'>💯 学生作业评分报告</h1>", 
+                   unsafe_allow_html=True)
+
+    # with col8:
+    #     # Export button
+    #     if st.button("📤 导出数据", type="secondary"):
+    #         st.info("导出功能将在后续版本中实现")
 
 def render_student_selection(students: List[StudentScore]):
     """渲染学生选择界面"""
@@ -237,6 +252,8 @@ def main():
     if selected_student:
         st.markdown("---")
         render_student_report(selected_student)
+
+    inject_pollers_for_active_jobs()
 
 if __name__ == "__main__":
     main()
