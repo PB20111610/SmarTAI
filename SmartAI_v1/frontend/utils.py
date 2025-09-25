@@ -145,7 +145,7 @@ def get_master_poller_html(jobs_json: str, backend_url: str) -> str:
                             // --- 核心修改：生成用户友好的弹窗消息 ---
                             const taskName = taskDetails.name || "未命名任务";
                             const submittedAt = taskDetails.submitted_at || "未知时间";
-                            alert(`您于 [${{submittedAt}}] 提交的任务\\n"${{taskName}}"\\n已成功完成！\\n如果当前在AI批改结果总览窗口，请手动点击右上角“刷新数据”按钮以查看详细数据！`);
+                            alert(`您于 [${{submittedAt}}] 提交的任务："${{taskName}}"已成功完成！\\n请前往“历史批改记录”-“批改结果”查看，或直接查看[报告]和[分析]。\\n如果您当前正在AI批改结果总览窗口，请手动点击右上角“刷新数据”按钮以查看最新批改数据！`);
                             // 标记为完成，防止重复弹窗
                             sessionStorage.setItem(completedKey, 'true');
                             // --- 新增功能：刷新当前页面 ---
@@ -252,58 +252,39 @@ def inject_pollers_for_active_jobs():
 #     poll_and_rerun(jobs_json_string, st.session_state.backend, key="global_job_poller")
 
 
+# utils.py
+
+# ... (keep all your existing functions like initialize_session_state, etc.) ...
+
 def get_all_jobs_for_selection():
     """
-    获取所有可供选择的批改任务，包括已完成、处理中和模拟任务。
-    返回一个字典 {job_id: {"task_name": "...", "status": "..."}}
+    Gets all jobs for selection in a dropdown, including mock and real tasks.
+    Returns a dictionary mapping job_id to a user-friendly name.
     """
-    all_jobs = {}
+    all_jobs_for_selection = {}
 
-    # 1. 添加模拟批改任务作为基础选项
-    if 'sample_data' not in st.session_state:
-        from frontend_utils.data_loader import load_mock_data
-        st.session_state.sample_data = load_mock_data()
-    
+    # 1. Add the mock task first as a baseline option
     if 'sample_data' in st.session_state and st.session_state.sample_data:
         assignment_stats = st.session_state.sample_data.get('assignment_stats')
         if assignment_stats:
             mock_job_id = "MOCK_JOB_001"
-            all_jobs[mock_job_id] = {
-                "task_name": f"【模拟数据】{assignment_stats.assignment_name}",
-                "status": "completed"
-            }
+            all_jobs_for_selection[mock_job_id] = f"【模拟数据】{assignment_stats.assignment_name}"
 
-    # 2. 遍历 session_state 中所有真实的任务
+    # 2. Add all real jobs from the session state
     if "jobs" in st.session_state and st.session_state.jobs:
-        job_ids = list(st.session_state.jobs.keys())
-        for job_id in job_ids:
+        # Sort jobs by submission time, newest first
+        sorted_job_ids = sorted(
+            st.session_state.jobs.keys(),
+            key=lambda jid: st.session_state.jobs[jid].get("submitted_at", "0"),
+            reverse=True
+        )
+
+        for job_id in sorted_job_ids:
             if job_id.startswith("MOCK_JOB_"):
                 continue
-            
-            task_info = st.session_state.jobs[job_id]
-            if task_info.get("is_mock", False):
-                continue
-            
-            try:
-                # 通过API检查任务状态
-                response = requests.get(f"{st.session_state.backend}/ai_grading/grade_result/{job_id}", timeout=3)
-                response.raise_for_status()
-                status = response.json().get("status", "pending")
-                
-                job_name = task_info.get("name", f"任务-{job_id[:8]}")
-                # 为处理中的任务添加特殊标记
-                if status == "pending":
-                    job_name += " (处理中...)"
 
-                all_jobs[job_id] = {
-                    "task_name": job_name,
-                    "status": status
-                }
-            except requests.exceptions.RequestException:
-                # 如果请求失败，也将其视为处理中
-                all_jobs[job_id] = {
-                    "task_name": f"{task_info.get('name', f'任务-{job_id[:8]}')} (状态未知)",
-                    "status": "pending" 
-                }
-            
-    return all_jobs
+            task_info = st.session_state.jobs[job_id]
+            job_name = task_info.get("name", f"任务-{job_id[:8]}")
+            all_jobs_for_selection[job_id] = job_name
+
+    return all_jobs_for_selection

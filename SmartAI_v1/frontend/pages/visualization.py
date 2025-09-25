@@ -420,28 +420,78 @@ def main():
     # 渲染页面
     render_header()
     
-    # 获取数据 - 优先使用AI批改数据，如果没有则使用示例数据
-    if 'ai_grading_data' in st.session_state and st.session_state.ai_grading_data:
-        data = st.session_state.ai_grading_data
-    elif 'sample_data' in st.session_state and st.session_state.sample_data:
-        data = st.session_state.sample_data
+    # --- 改动 1: 替换旧的数据加载逻辑 ---
+    # 旧的 init_session_state 和数据获取逻辑被以下更强大的选择器取代。
+    selectable_jobs = get_all_jobs_for_selection()
+
+    if not selectable_jobs:
+        st.warning("当前没有批改任务记录可供分析。")
+        st.stop()
+
+    job_ids = list(selectable_jobs.keys())
+    default_index = 0
+
+    # --- 改动 2: 实现与 score_report.py 一致的智能默认选择 ---
+    # 优先级 1: 从 history.py 跳转而来
+    if "selected_job_from_history" in st.session_state:
+        job_id_from_history = st.session_state.selected_job_from_history
+        if job_id_from_history in job_ids:
+            default_index = job_ids.index(job_id_from_history)
+        del st.session_state.selected_job_from_history
+    
+    # 优先级 2: 使用在其他页面已选中的全局任务ID
+    elif "selected_job_id" in st.session_state and st.session_state.selected_job_id in job_ids:
+        default_index = job_ids.index(st.session_state.selected_job_id)
+
+    # --- 改动 3: 创建下拉选择框 ---
+    def on_selection_change():
+        """回调函数：当用户手动选择后，更新全局的任务ID"""
+        st.session_state.selected_job_id = st.session_state.viz_job_selector
+
+    selected_job = st.selectbox(
+        "选择要进行可视化分析的批改任务",
+        options=job_ids,
+        format_func=lambda jid: selectable_jobs.get(jid, jid),
+        index=default_index,
+        key="viz_job_selector", # 使用唯一的 key
+        on_change=on_selection_change
+    )
+    
+    # 实时更新全局选择ID，确保页面内状态一致
+    st.session_state.selected_job_id = selected_job
+    st.markdown("---")
+
+    # --- 改动 4: 根据下拉框的选择，加载对应的数据 ---
+    data_to_display = None
+    if selected_job.startswith("MOCK_JOB"):
+        # 如果是模拟任务，直接从 session_state 加载模拟数据
+        data_to_display = st.session_state.get('sample_data', load_mock_data())
     else:
-        # Load mock data as fallback
-        data = load_mock_data()
+        # 如果是真实任务，从后端API加载数据
+        with st.spinner("正在加载AI批改数据..."):
+            ai_data = load_ai_grading_data(selected_job)
+            if "error" not in ai_data:
+                data_to_display = ai_data
+            else:
+                st.error(f"加载AI批改数据失败: {ai_data['error']}")
+                st.info("将显示模拟数据作为备用。")
+                data_to_display = st.session_state.get('sample_data', load_mock_data())
     
-    students = data.get('student_scores', [])
-    assignment_stats = data.get('assignment_stats', None)
-    question_analysis = data.get('question_analysis', [])
+    if not data_to_display:
+        st.warning("无法加载所选任务的数据。")
+        st.stop()
+        
+    # --- 改动 5: 使用新加载的数据驱动页面渲染 ---
+    # 旧代码是直接从 st.session_state.ai_grading_data 或 sample_data 中获取数据,
+    # 现在我们统一从 data_to_display 变量中获取。
+    # 后续的渲染函数完全不需要修改。
+    students = data_to_display.get('student_scores', [])
+    assignment_stats = data_to_display.get('assignment_stats', None)
+    question_analysis = data_to_display.get('question_analysis', [])
     
-    # 渲染筛选器
-    # filtered_students, filtered_questions = render_filters(students, question_analysis)
-    
-    # 渲染统计概览
-    if assignment_stats:
-        render_statistics_overview(students, assignment_stats)
-    else:
-        # Create a default assignment stats object if not available
-        default_stats = AssignmentStats(
+    # 如果 assignment_stats 不存在，创建一个默认的（此逻辑与您原代码一致）
+    if not assignment_stats and students:
+         assignment_stats = AssignmentStats(
             assignment_id="DEFAULT",
             assignment_name="示例作业",
             total_students=len(students),
@@ -451,10 +501,13 @@ def main():
             min_score=min([s.percentage for s in students]) if students else 0,
             std_score=np.std([s.percentage for s in students]) if students else 0,
             pass_rate=(len([s for s in students if s.percentage >= 60]) / len(students) * 100) if students else 0,
-            question_count=0,
+            question_count=len(question_analysis),
             create_time=datetime.now()
         )
-        render_statistics_overview(students, default_stats)
+
+    # 渲染统计概览
+    if assignment_stats:
+        render_statistics_overview(students, assignment_stats)
     
     st.markdown("---")
     

@@ -179,74 +179,74 @@ def render_completed_records():
     """渲染已完成的批改记录"""
     st.markdown("## ✅ 已完成批改")
     st.markdown("这里显示已完成AI批改的作业记录，可以查看结果和可视化分析。")
-    
-    # 同步完成记录
-    sync_completed_records()
-    
-    # 合并来自jobs的已完成记录
-    all_completed = {}
-    all_completed.update(st.session_state.completed_records)
-    
-    # 从jobs中获取已完成的记录
-    if "jobs" in st.session_state and st.session_state.jobs:
-        # Create a copy of the keys to avoid "dictionary changed size during iteration" error
-        job_ids = list(st.session_state.jobs.keys())
-        for job_id in job_ids:
-            # Check if job_id still exists (in case it was deleted during iteration)
-            if job_id not in st.session_state.jobs:
-                continue
-                
-            # Skip mock jobs entirely
-            if job_id.startswith("MOCK_JOB_"):
-                continue
-                
-            task_info = st.session_state.jobs[job_id]
-            
-            # Check if this is a mock job
-            is_mock = task_info.get("is_mock", False)
-            
-            if is_mock:
-                continue
-            
-            try:
-                result = requests.get(f"{st.session_state.backend}/ai_grading/grade_result/{job_id}", timeout=5)
-                result.raise_for_status()
-                status = result.json().get("status", "未知")
-                
-                if status == "completed" and job_id not in all_completed:
-                    all_completed[job_id] = {
-                        "task_name": task_info.get("name", "未知任务"),
-                        "submitted_at": task_info.get("submitted_at", "未知时间"),
-                        "completed_at": "刚刚",
-                        "status": status
-                    }
-            except:
-                continue
-    
-    # 添加mock数据作为已完成的批改记录
+
+    # --- 改动 1: 简化逻辑 ---
+    # 移除对 sync_completed_records() 的调用和复杂的合并逻辑。
+    # 创建一个全新的字典来安全地构建显示列表，而不是修改 session_state。
+    all_completed_display = {}
+
+    # --- 改动 2: 永久显示模拟数据任务 ---
+    # 直接从 session_state 读取模拟数据并将其作为第一项添加到显示列表中。
+    # 这确保了模拟任务总是可见的，不会被意外删除。
     if 'sample_data' in st.session_state and st.session_state.sample_data:
         assignment_stats = st.session_state.sample_data.get('assignment_stats')
         if assignment_stats:
-            # Check if we already have a mock job entry
-            mock_job_exists = any("MOCK_JOB" in job_id for job_id in all_completed.keys())
-            
-            if not mock_job_exists:
-                # Add mock data as a completed job
-                mock_job_id = "MOCK_JOB_001"
-                submit_time = assignment_stats.create_time.strftime("%Y-%m-%d %H:%M:%S") if hasattr(assignment_stats.create_time, 'strftime') else "未知时间"
-                all_completed[mock_job_id] = {
-                    "task_name": assignment_stats.assignment_name,
-                    "submitted_at": submit_time,
-                    "completed_at": submit_time,
+            mock_job_id = "MOCK_JOB_001"
+            submit_time = assignment_stats.create_time.strftime("%Y-%m-%d %H:%M:%S")
+            all_completed_display[mock_job_id] = {
+                "task_name": f"【模拟数据】{assignment_stats.assignment_name}",
+                "submitted_at": submit_time,
+                "completed_at": submit_time, # For mock, completed time is the same
+                "status": "completed"
+            }
+
+    # --- 改动 3: 安全地遍历和检查真实任务 ---
+    # 从 st.session_state.jobs 中读取所有真实任务。
+    # 关键点：这个循环只读取数据来检查状态，绝不删除或修改 st.session_state.jobs 本身。
+    # 这修复了历史记录丢失的核心 bug。
+    if "jobs" in st.session_state and st.session_state.jobs:
+        # 按提交时间逆序排序，让最新的任务显示在最前面
+        sorted_job_ids = sorted(
+            st.session_state.jobs.keys(),
+            key=lambda jid: st.session_state.jobs[jid].get("submitted_at", "0"),
+            reverse=True
+        )
+        
+        for job_id in sorted_job_ids:
+            if job_id.startswith("MOCK_JOB_"):
+                continue  # 模拟任务已经处理过了
+
+            task_info = st.session_state.jobs[job_id]
+            status = "pending"  # 默认状态
+            try:
+                # 向后端查询任务的最新状态
+                result = requests.get(f"{st.session_state.backend}/ai_grading/grade_result/{job_id}", timeout=3)
+                if result.ok:
+                    status = result.json().get("status", "pending")
+            except requests.RequestException:
+                status = "error" # 如果网络请求失败，可以标记为错误或未知
+
+            # 只将状态为 "completed" 的任务添加到显示列表中
+            if status == "completed":
+                all_completed_display[job_id] = {
+                    "task_name": task_info.get("name", "未知任务"),
+                    "submitted_at": task_info.get("submitted_at", "未知时间"),
+                    "completed_at": "刚刚", # 注意：可以从后端获取更精确的完成时间
                     "status": "completed"
                 }
-    
-    if not all_completed:
+
+    if not all_completed_display:
         st.info("暂无已完成的批改记录。")
         return
-    
-    # 显示已完成记录
-    for job_id, record in all_completed.items():
+
+    sorted_records_list = sorted(
+        all_completed_display.items(), 
+        key=lambda item: item[1]['submitted_at'], 
+        reverse=True
+    )
+    # --- 改动 4: 调整显示和导航逻辑 ---
+    # 遍历我们安全构建的 all_completed_display 字典来显示记录。
+    for job_id, record in sorted_records_list:
         with st.container():
             st.markdown(f"""
             <div style="background: white; padding: 1.5rem; border-radius: 10px; box-shadow: 0 4px 15px rgba(0,0,0,0.1); margin: 1rem 0; border-left: 4px solid #10B981;">
@@ -266,32 +266,29 @@ def render_completed_records():
                 </div>
             </div>
             """, unsafe_allow_html=True)
-            
+
             # 操作按钮
-            col1, col2, col3, col4 = st.columns(4)
-            
+            col0, col1, col2, col3, col4 = st.columns(5)
+
+            with col0:
+                if st.button("📊 批改结果", key=f"result_{job_id}", use_container_width=True, type="secondary"):
+                    st.session_state.selected_job_from_history = job_id
+                    st.switch_page("pages/grade_results.py")
+
             with col1:
                 if st.button("💯 评分报告", key=f"view_{job_id}", use_container_width=True, type="secondary"):
-                    # For mock jobs, directly load the mock data into session state
-                    if job_id.startswith("MOCK_JOB"):
-                        # Load mock data directly into ai_grading_data so score_report.py can use it
-                        st.session_state.ai_grading_data = st.session_state.sample_data
-                        st.session_state.selected_job_id = None  # Don't set job ID for mock data
-                    else:
-                        st.session_state.selected_job_id = job_id
+                    # --- 改动 5: 使用专用的临时变量传递选择 ---
+                    # 这可以明确地告诉目标页面，用户是从历史记录页点击了特定任务。
+                    # 避免了与全局 selected_job_id 冲突。
+                    st.session_state.selected_job_from_history = job_id
                     st.switch_page("pages/score_report.py")
-            
+
             with col2:
                 if st.button("📈 成绩分析", key=f"viz_{job_id}", use_container_width=True):
-                    # For mock jobs, directly load the mock data into session state
-                    if job_id.startswith("MOCK_JOB"):
-                        # Load mock data directly into ai_grading_data so visualization.py can use it
-                        st.session_state.ai_grading_data = st.session_state.sample_data
-                        st.session_state.selected_job_id = None  # Don't set job ID for mock data
-                    else:
-                        st.session_state.selected_job_id = job_id
+                    # 同样使用临时变量
+                    st.session_state.selected_job_from_history = job_id
                     st.switch_page("pages/visualization.py")
-            
+
             with col3:
                 if st.button("📄 导出PDF报告", key=f"report_{job_id}", use_container_width=True):
                     try:
@@ -377,23 +374,16 @@ def render_completed_records():
                         st.error(f"生成报告时出错: {str(e)}")
             
             with col4:
-                # Check if this is a mock job
-                task_info = st.session_state.jobs.get(job_id, {}) if "jobs" in st.session_state else {}
-                is_mock = task_info.get("is_mock", False) or job_id.startswith("MOCK_JOB")
-                
-                # Don't allow removal of mock jobs
-                if not is_mock and st.button("🗑️ 删除记录", key=f"remove_{job_id}", use_container_width=True, type="secondary"):
-                    # 从jobs中移除
-                    if "jobs" in st.session_state and job_id in st.session_state.jobs:
+                # --- 改动 6: 修正删除逻辑 ---
+                # 确保删除按钮只对真实任务有效，并且只从 st.session_state.jobs 中删除。
+                if not job_id.startswith("MOCK_JOB") and st.button("🗑️ 删除记录", key=f"remove_{job_id}", use_container_width=True, type="secondary"):
+                    if job_id in st.session_state.jobs:
                         del st.session_state.jobs[job_id]
-                    # 从completed_records中移除
-                    if job_id in st.session_state.completed_records:
-                        del st.session_state.completed_records[job_id]
-                    st.success("记录已移除！")
-                    st.rerun()
-                elif is_mock:
-                    # For mock jobs, just show a disabled button or informative text
-                    st.button("【这是示例模拟任务】", key=f"remove_{job_id}", use_container_width=True, type="secondary")
+                        st.success("记录已移除！")
+                        st.rerun()
+                elif job_id.startswith("MOCK_JOB"):
+                     st.button("【示例模拟任务】", disabled=True, key=f"remove_{job_id}", use_container_width=True)
+
 
 def render_statistics_overview():
     """渲染统计概览"""
