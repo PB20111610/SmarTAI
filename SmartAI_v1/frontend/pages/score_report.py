@@ -95,7 +95,7 @@ def render_student_selection(students: List[StudentScore]):
     
     selected_option = st.selectbox(
         "选择学生",
-        ["请选择学生..."] + student_options,
+        ["请选择学生...（学生列表按成绩从高到低排序）"] + student_options,
         help="学生列表按成绩从高到低排序"
     )
     
